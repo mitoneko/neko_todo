@@ -1,0 +1,20 @@
+\documentclass[paper=a4paper, fontsize=10pt, head_space=10mm, foot_space=17mm, gutter=17mm, line_length=185mm, twoside]{jlreq}
+\usepackage{minted}
+\usepackage{hyperref}
+\pagestyle{plain}
+
+\title{neko\_todo ソースリスト}
+\author{美都}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\clearpage
+
+\section Rustソース
+\section{メインモジュール　main.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/main.rs}
+\clearpage
+
+\end{document}
