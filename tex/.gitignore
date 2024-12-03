@@ -3,6 +3,7 @@ mariadb/*
 src-react/*
 src-rs/*
 _minted-list/*
+_minted/*
 list.aux
 list.log
 list.out
