@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Grid, GridItem} from "@yamada-ui/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -14,6 +15,9 @@ function TodoList() {
         queryFn: get_todo_list,
     });
 
+    const navi = useNavigate();
+    const handleClick = () => navi('/login');
+
     if (isTodoListLoading) {
         return ( <p> loading... </p>);
     }
@@ -25,6 +29,7 @@ function TodoList() {
     console.log(todos);
     return (
         <>
+            <button type="button" onClick={handleClick}> 入力欄への遷移 </button>
             <h1>テスト</h1>
             <Grid templateColumns="repeat(4, 1fr)" gap="md">
                 {todos?.map( todo_item => {

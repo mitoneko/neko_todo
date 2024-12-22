@@ -6,18 +6,21 @@ use std::{
     io::{BufWriter, ErrorKind, Result, Write},
     path::PathBuf,
 };
+use uuid::Uuid;
 
 const CONF_FILE_NAME: &str = "neko_todo.conf";
 const CONF_DIR_NAME: &str = "neko_todo";
 const DB_HOST: &str = "NEKO_DB_DB_HOST";
 const DB_USER: &str = "NEKO_DB_DB_USER";
 const DB_PASS: &str = "NEKO_DB_DB_PASS";
+const SESSION: &str = "NEKO_DB_SESSION_ID";
 
 #[derive(Debug)]
 pub struct NekoTodoConfig {
     db_host: String,
     db_user: String,
     db_pass: String,
+    session_id: Option<Uuid>,
     dirty: bool,
 }
 
@@ -25,10 +28,15 @@ impl NekoTodoConfig {
     pub fn new() -> dotenvy::Result<Self> {
         let file = Self::get_config_file_path().map_err(dotenvy::Error::Io)?;
         dotenvy::from_path(file)?;
+        let session_id = std::env::var(SESSION)
+            .ok()
+            .map(|s| Uuid::parse_str(&s).expect("環境ファイル異常:SESSION_ID不正"));
+
         Ok(Self {
             db_host: std::env::var(DB_HOST).unwrap_or_default(),
             db_user: std::env::var(DB_USER).unwrap_or_default(),
             db_pass: std::env::var(DB_PASS).unwrap_or_default(),
+            session_id,
             dirty: false,
         })
     }
@@ -43,6 +51,10 @@ impl NekoTodoConfig {
 
     pub fn get_db_pass(&self) -> &str {
         &self.db_pass
+    }
+
+    pub fn get_session_id(&self) -> Option<Uuid> {
+        self.session_id
     }
 
     pub fn set_db_host(&mut self, val: &str) {
@@ -60,13 +72,25 @@ impl NekoTodoConfig {
         self.dirty = true;
     }
 
-    fn save(&self) -> Result<()> {
+    pub fn set_session_id(&mut self, uuid: &Uuid) {
+        self.session_id = Some(*uuid);
+        self.dirty = true;
+    }
+
+    pub fn save(&mut self) -> Result<()> {
+        if !self.dirty {
+            return Ok(());
+        }
         let path = Self::get_config_file_path()?;
         let file = OpenOptions::new().write(true).truncate(true).open(&path)?;
         let mut buffer = BufWriter::new(file);
         writeln!(buffer, "{}={}", DB_HOST, self.get_db_host())?;
         writeln!(buffer, "{}={}", DB_USER, self.get_db_user())?;
         writeln!(buffer, "{}={}", DB_PASS, self.get_db_pass())?;
+        if let Some(s) = self.session_id {
+            writeln!(buffer, "{}={}", SESSION, s)?;
+        }
+        self.dirty = false;
         Ok(())
     }
 

@@ -9,16 +9,11 @@ pub struct AppStatus {
 }
 
 impl AppStatus {
-    pub fn new() -> Self {
-        let config = match NekoTodoConfig::new() {
-            Ok(conf) => Arc::new(Mutex::from(conf)),
-            Err(e) => {
-                eprintln!("致命的エラー。configの取得に失敗。\n {}", e);
-                std::process::exit(1)
-            }
-        };
-        let todo = Todo::new();
-        Self { config, todo }
+    pub fn new(config: NekoTodoConfig, todo: Todo) -> Self {
+        Self {
+            config: Arc::new(Mutex::new(config)),
+            todo,
+        }
     }
 
     pub fn config(&self) -> &Mutex<NekoTodoConfig> {

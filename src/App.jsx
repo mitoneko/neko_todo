@@ -4,12 +4,18 @@ import { createBrowserRouter ,createRoutesFromElements, Route, RouterProvider, }
 
 import BasePage from "./BasePage.jsx";
 import TodoList from "./TodoList.jsx";
+import Login from "./Login.jsx";
+import RegistUser from "./RegistUser.jsx";
+import Init from "./Init.jsx";
 
 export const routes = createBrowserRouter(
     createRoutesFromElements(
         <>
             <Route element={ <BasePage/> }>
-                <Route path="/" element={<TodoList/>}/>
+                <Route path="/" element={<Init/>}/>
+                <Route path="/login" element={<Login/>}/>
+                <Route path="/regist_user" element={<RegistUser/>}/>
+                <Route path="/todo" element={<TodoList/>}/>
             </Route>
         </>
     ));

@@ -1,9 +1,5 @@
 # 猫todo関係のすべてのmariadbオブジェクトの生成
 
-create database if not exists nekotodo;
-
-use nekotodo;
-
 create table if not exists users (
     name varchar(128) primary key,
     password varchar(61)
