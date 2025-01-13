@@ -1,6 +1,8 @@
 //! データベースの操作を司る
 
+use chrono::{Local, NaiveDate};
 use log::error;
+use serde::{Deserialize, Serialize};
 use sqlx::{
     mysql::{MySqlPool, MySqlPoolOptions},
     prelude::*,
@@ -26,6 +28,62 @@ impl Database {
             .await
             .map_err(DbError::FailConnect)?;
         Ok(Self { pool })
+    }
+
+    /// Todo項目を追加する。
+    /// item引数のうち、id, update_date, doneは、無視される
+    /// 各々、自動値・今日の日付・falseがはいる。
+    /// start_date, end_dateのデフォルト値は、今日・NaiveDate::MAXである。
+    pub async fn add_todo_item(&self, item: &ItemTodo) -> Result<(), DbError> {
+        let sql = r#"
+            insert into todo(user_name, title, work, update_date, start_date, end_date, done)
+            values (?, ?, ?, curdate(), ?, ?, false);
+        "#;
+        let start_date = item.start_date.unwrap_or(Local::now().date_naive());
+        let end_date = item
+            .end_date
+            .unwrap_or(NaiveDate::from_ymd_opt(9999, 12, 31).unwrap());
+        query(sql)
+            .bind(&item.user_name)
+            .bind(&item.title)
+            .bind(&item.work)
+            .bind(start_date)
+            .bind(end_date)
+            .execute(&self.pool)
+            .await
+            .map_err(DbError::FailDbAccess)?;
+        Ok(())
+    }
+
+    /// Todoの一覧を取得する。
+    /// 基準日(ref_date)以降のアイテムを選別する。
+    /// セッションIDを必要とする。
+    /// 検索オプションのとり方は未確定。インターフェース変更の可能性大。
+    pub async fn get_todo_item(
+        &self,
+        sess: Uuid,
+        ref_date: NaiveDate,
+        only_incomplete: bool,
+    ) -> Result<Vec<ItemTodo>, DbError> {
+        let sql1 = r#"
+            select t.id, t.user_name, title, work, update_date, start_date, end_date, done 
+            from todo t join sessions s on s.user_name = t.user_name 
+            where s.id=? and t.start_date <= ? 
+            "#;
+        let sql2 = " and done = false";
+        let sql = if only_incomplete {
+            format!("{} {};", sql1, sql2)
+        } else {
+            format!("{} ;", sql1)
+        };
+        let items = query_as::<_, ItemTodo>(&sql)
+            .bind(sess.to_string())
+            .bind(ref_date)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(DbError::FailDbAccess)?;
+
+        Ok(items)
     }
 
     /// ユーザーの追加
@@ -58,6 +116,24 @@ impl Database {
             .await
             .map_err(|e| match e {
                 sqlx::Error::RowNotFound => DbError::NotFoundUser,
+                e => DbError::FailDbAccess(e),
+            })
+    }
+
+    /// セッションIDをキーにしてユーザー情報を取得
+    pub async fn get_user_from_sess(&self, sess: Uuid) -> Result<User, DbError> {
+        let sql = r#"
+            select u.name, u.password 
+            from users u join sessions s on u.name=s.user_name 
+            where s.id = ?;
+            "#;
+
+        query_as(sql)
+            .bind(sess.to_string())
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::RowNotFound => DbError::NotFoundSession,
                 e => DbError::FailDbAccess(e),
             })
     }
@@ -158,10 +234,22 @@ impl Database {
     }
 }
 
-#[derive(FromRow, Debug)]
+#[derive(FromRow, Debug, PartialEq)]
 pub struct User {
     pub name: String,
     pub password: String,
+}
+
+#[derive(FromRow, Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct ItemTodo {
+    pub id: u32,
+    pub user_name: String,
+    pub title: String,
+    pub work: Option<String>,
+    pub update_date: Option<NaiveDate>,
+    pub start_date: Option<NaiveDate>,
+    pub end_date: Option<NaiveDate>,
+    pub done: bool,
 }
 
 #[derive(Error, Debug)]
@@ -180,6 +268,8 @@ pub enum DbError {
 
 #[cfg(test)]
 mod test {
+    use chrono::Days;
+
     use super::*;
 
     /// テスト用のDatabase生成。テスト用Poolをインジェクション
@@ -259,5 +349,179 @@ mod test {
 
         println!("偽セッションIDをいれて、問い合わせてみる。");
         assert!(!db.is_session_valid(&Uuid::now_v7()).await.unwrap());
+    }
+
+    /// todoの書き込みと、単純な読み出しのテスト
+    #[sqlx::test]
+    async fn test_add_todo(pool: MySqlPool) {
+        let db = Database::new_test(pool);
+
+        println!("テスト用ユーザー及びセッションの生成");
+        let name = "test";
+        let pass = "test";
+        db.add_user(name, pass).await.unwrap();
+        let sess = db.make_new_session(name).await.unwrap();
+
+        println!("テストデータをインサート");
+        let mut item = ItemTodo {
+            id: 0,
+            user_name: name.to_string(),
+            title: "インサートできるかな?".to_string(),
+            work: Some("中身入り".to_string()),
+            update_date: None,
+            start_date: Some(Local::now().date_naive()),
+            end_date: Some(Local::now().date_naive() + Days::new(3)),
+            done: true,
+        };
+        db.add_todo_item(&item).await.unwrap();
+
+        println!("テストデータを読み出す。一件しかないはず");
+        let last_day = Local::now().date_naive() + Days::new(1);
+        let res = db.get_todo_item(sess, last_day, true).await.unwrap();
+        assert_eq!(res.len(), 1, "あれ?一件のはずだよ");
+        item.id = res[0].id;
+        item.update_date = Some(Local::now().date_naive());
+        item.done = false;
+    }
+
+    /// todoの書き込みと読み出し。
+    /// workが未入力の場合。
+    #[sqlx::test]
+    async fn test_add_todo_without_work(pool: MySqlPool) {
+        let db = Database::new_test(pool);
+
+        println!("テスト用ユーザー及びセッションの生成");
+        let name = "test";
+        let pass = "test";
+        db.add_user(name, pass).await.unwrap();
+        let sess = db.make_new_session(name).await.unwrap();
+
+        println!("テストデータをインサート");
+        let mut item = ItemTodo {
+            id: 0,
+            user_name: name.to_string(),
+            title: "インサートできるかな?".to_string(),
+            work: None,
+            update_date: None,
+            start_date: Some(Local::now().date_naive()),
+            end_date: Some(Local::now().date_naive() + Days::new(3)),
+            done: true,
+        };
+        db.add_todo_item(&item).await.unwrap();
+
+        println!("テストデータを読み出す。一件しかないはず");
+        let last_day = Local::now().date_naive() + Days::new(1);
+        let res = db.get_todo_item(sess, last_day, true).await.unwrap();
+        assert_eq!(res.len(), 1, "あれ?一件のはずだよ");
+        item.id = res[0].id;
+        item.update_date = Some(Local::now().date_naive());
+        item.done = false;
+    }
+
+    /// todoの書き込みと読み出し
+    /// done=trueとfalseの挙動テスト
+    #[sqlx::test]
+    async fn test_get_todo_done_param(pool: MySqlPool) {
+        let db = Database::new_test(pool.clone());
+
+        println!("テスト用ユーザー及びセッションの生成");
+        let name = "test";
+        let pass = "test";
+        db.add_user(name, pass).await.unwrap();
+        let sess = db.make_new_session(name).await.unwrap();
+
+        println!("テストデータをインサート");
+        let item = ItemTodo {
+            id: 0,
+            user_name: name.to_string(),
+            title: "インサートできるかな?".to_string(),
+            work: None,
+            update_date: None,
+            start_date: Some(Local::now().date_naive()),
+            end_date: Some(Local::now().date_naive() + Days::new(3)),
+            done: true,
+        };
+        db.add_todo_item(&item).await.unwrap();
+
+        println!("テストデータを読み出す。一件しかないはず");
+        let last_day = Local::now().date_naive() + Days::new(1);
+        let res = db.get_todo_item(sess, last_day, false).await.unwrap();
+        assert_eq!(res.len(), 1, "全部読み出しだけど一件あるはず。");
+        let res = db.get_todo_item(sess, last_day, true).await.unwrap();
+        assert_eq!(res.len(), 1, "未完了だけだけど、一件あるはず。");
+
+        println!("今作ったjobを完了済みにする。");
+        let sql = "update todo set done=true where id=?;";
+        query(sql).bind(res[0].id).execute(&pool).await.unwrap();
+        let res = db.get_todo_item(sess, last_day, false).await.unwrap();
+        assert_eq!(res.len(), 1, "全部読み出しだけど一件あるはず。");
+        let res = db.get_todo_item(sess, last_day, true).await.unwrap();
+        assert_eq!(res.len(), 0, "未完了だけだけだから、なにもないはず。");
+    }
+
+    /// todoの書き込みと読み出し
+    /// 基準日の挙動テスト
+    #[sqlx::test]
+    async fn test_get_todo_ref_date(pool: MySqlPool) {
+        let db = Database::new_test(pool.clone());
+
+        println!("テスト用ユーザー及びセッションの生成");
+        let name = "test";
+        let pass = "test";
+        db.add_user(name, pass).await.unwrap();
+        let sess = db.make_new_session(name).await.unwrap();
+
+        println!("テストデータをインサート");
+        let item = ItemTodo {
+            id: 0,
+            user_name: name.to_string(),
+            title: "インサートできるかな?".to_string(),
+            work: None,
+            update_date: None,
+            start_date: Some(Local::now().date_naive()),
+            end_date: Some(Local::now().date_naive() + Days::new(3)),
+            done: false,
+        };
+        db.add_todo_item(&item).await.unwrap();
+
+        let ref_date = Local::now().date_naive();
+        let res = db.get_todo_item(sess, ref_date, true).await.unwrap();
+        assert_eq!(res.len(), 1, "基準日と開始日が同じだからみつかる。");
+        let res = db
+            .get_todo_item(sess, ref_date + Days::new(1), true)
+            .await
+            .unwrap();
+        assert_eq!(res.len(), 1, "開始日の翌日が基準日だからみつかる。");
+        let res = db
+            .get_todo_item(sess, ref_date - Days::new(1), true)
+            .await
+            .unwrap();
+        assert_eq!(res.len(), 0, "基準日が開始日の前日だからみつからない。");
+        let res = db
+            .get_todo_item(sess, ref_date + Days::new(4), true)
+            .await
+            .unwrap();
+        assert_eq!(res.len(), 1, "基準日が期限を過ぎているけどみつかるの。");
+    }
+
+    #[sqlx::test]
+    async fn test_get_user_from_sess(pool: MySqlPool) {
+        let db = Database::new_test(pool.clone());
+
+        println!("テスト用ユーザー及びセッションの生成");
+        let name = "test";
+        let pass = "test";
+        db.add_user(name, pass).await.unwrap();
+        let sess = db.make_new_session(name).await.unwrap();
+
+        let user = db.get_user_from_sess(sess).await.unwrap();
+        assert_eq!(user.name, name, "これはみつかるはず");
+        let dummy_sess = Uuid::now_v7();
+        let user = db.get_user_from_sess(dummy_sess).await;
+        match user {
+            Ok(_) => assert!(false, "見つかるわけないでしょう。"),
+            Err(DbError::NotFoundSession) => {}
+            Err(e) => assert!(false, "トラブルです。{e}"),
+        };
     }
 }

@@ -15,9 +15,9 @@ create table if not exists todo (
     title varchar(128) not null,
     work varchar(2048),
     update_date date not null,
-    start_date date,
-    end_date date,
-    done bool
+    start_date date not null,
+    end_date date not null,
+    done bool not null
     ) ;
 
 create table if not exists tag (

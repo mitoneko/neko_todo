@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Grid, GridItem} from "@yamada-ui/react";
+import { Grid, GridItem, HStack, IconButton} from "@yamada-ui/react";
 import { invoke } from "@tauri-apps/api/core";
+import { AiOutlineFileAdd } from "react-icons/ai";
 import "./App.css";
 import TodoItem from "./todoitem";
 
@@ -17,6 +17,7 @@ function TodoList() {
 
     const navi = useNavigate();
     const handleClick = () => navi('/login');
+    const handleAddTodo = () => navi('/addtodo');
 
     if (isTodoListLoading) {
         return ( <p> loading... </p>);
@@ -29,6 +30,10 @@ function TodoList() {
     console.log(todos);
     return (
         <>
+            <HStack>
+                <IconButton icon={<AiOutlineFileAdd/>} onClick={handleAddTodo}/>
+            </HStack>
+
             <button type="button" onClick={handleClick}> 入力欄への遷移 </button>
             <h1>テスト</h1>
             <Grid templateColumns="repeat(4, 1fr)" gap="md">

@@ -25,7 +25,7 @@ serde_json = "1"
 chrono = { version = "0.4.38", features = ["serde"] }
 directories = "5.0.1"
 dotenvy = "0.15.7"
-sqlx = { version = "0.8.2", features = ["runtime-tokio", "mysql", "derive"] }
+sqlx = { version = "0.8.2", features = ["runtime-tokio", "mysql", "derive", "chrono"] }
 bcrypt = { version = "0.16.0", features = ["alloc"] }
 thiserror = "2.0.4"
 log = "0.4.22"

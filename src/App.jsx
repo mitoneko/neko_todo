@@ -4,6 +4,7 @@ import { createBrowserRouter ,createRoutesFromElements, Route, RouterProvider, }
 
 import BasePage from "./BasePage.jsx";
 import TodoList from "./TodoList.jsx";
+import AddTodo from "./AddTodo.jsx";
 import Login from "./Login.jsx";
 import RegistUser from "./RegistUser.jsx";
 import Init from "./Init.jsx";
@@ -16,6 +17,7 @@ export const routes = createBrowserRouter(
                 <Route path="/login" element={<Login/>}/>
                 <Route path="/regist_user" element={<RegistUser/>}/>
                 <Route path="/todo" element={<TodoList/>}/>
+                <Route path="/addtodo" element={<AddTodo/>}/>
             </Route>
         </>
     ));
