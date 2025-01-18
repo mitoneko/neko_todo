@@ -86,6 +86,41 @@ impl Database {
         Ok(items)
     }
 
+    /// 指定idのTodo項目を取得する。
+    /// 有効なセッションが指定されていなければ、未発見とする。
+    pub async fn get_todo_item_with_id(&self, id: u32, sess: Uuid) -> Result<ItemTodo, DbError> {
+        let sql = r#"
+            select t.id, t.user_name, t.title, t.work, t.update_date, t.start_date, t.end_date, t.done 
+            from todo t join sessions s on s.user_name = t.user_name 
+            where s.id=? and t.id=?
+            "#;
+        query_as::<_, ItemTodo>(sql)
+            .bind(sess.to_string())
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::RowNotFound => DbError::NotFoundTodo,
+                e => DbError::FailDbAccess(e),
+            })
+    }
+
+    /// Todoの完了状態を更新する。
+    pub async fn change_done(&self, id: u32, done: bool) -> Result<(), DbError> {
+        let sql = "update todo set done = ? where id = ?";
+        let res = query(sql)
+            .bind(done)
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(DbError::FailDbAccess)?;
+        if res.rows_affected() > 0 {
+            Ok(())
+        } else {
+            Err(DbError::NotFoundTodo)
+        }
+    }
+
     /// ユーザーの追加
     pub async fn add_user(&self, name: &str, pass: &str) -> Result<(), DbError> {
         let sql = "insert into users(name, password) values (?, ?);";
@@ -264,6 +299,8 @@ pub enum DbError {
     NotFoundUser,
     #[error("指定されたセッションidが見つかりません。")]
     NotFoundSession,
+    #[error("指定されたidのtodoが見つかりません。")]
+    NotFoundTodo,
 }
 
 #[cfg(test)]
@@ -355,12 +392,8 @@ mod test {
     #[sqlx::test]
     async fn test_add_todo(pool: MySqlPool) {
         let db = Database::new_test(pool);
-
-        println!("テスト用ユーザー及びセッションの生成");
-        let name = "test";
-        let pass = "test";
-        db.add_user(name, pass).await.unwrap();
-        let sess = db.make_new_session(name).await.unwrap();
+        let sess = login_for_test(&db).await;
+        let name = db.get_user_from_sess(sess).await.unwrap().name;
 
         println!("テストデータをインサート");
         let mut item = ItemTodo {
@@ -389,12 +422,8 @@ mod test {
     #[sqlx::test]
     async fn test_add_todo_without_work(pool: MySqlPool) {
         let db = Database::new_test(pool);
-
-        println!("テスト用ユーザー及びセッションの生成");
-        let name = "test";
-        let pass = "test";
-        db.add_user(name, pass).await.unwrap();
-        let sess = db.make_new_session(name).await.unwrap();
+        let sess = login_for_test(&db).await;
+        let name = db.get_user_from_sess(sess).await.unwrap().name;
 
         println!("テストデータをインサート");
         let mut item = ItemTodo {
@@ -423,12 +452,8 @@ mod test {
     #[sqlx::test]
     async fn test_get_todo_done_param(pool: MySqlPool) {
         let db = Database::new_test(pool.clone());
-
-        println!("テスト用ユーザー及びセッションの生成");
-        let name = "test";
-        let pass = "test";
-        db.add_user(name, pass).await.unwrap();
-        let sess = db.make_new_session(name).await.unwrap();
+        let sess = login_for_test(&db).await;
+        let name = db.get_user_from_sess(sess).await.unwrap().name;
 
         println!("テストデータをインサート");
         let item = ItemTodo {
@@ -464,12 +489,8 @@ mod test {
     #[sqlx::test]
     async fn test_get_todo_ref_date(pool: MySqlPool) {
         let db = Database::new_test(pool.clone());
-
-        println!("テスト用ユーザー及びセッションの生成");
-        let name = "test";
-        let pass = "test";
-        db.add_user(name, pass).await.unwrap();
-        let sess = db.make_new_session(name).await.unwrap();
+        let sess = login_for_test(&db).await;
+        let name = db.get_user_from_sess(sess).await.unwrap().name;
 
         println!("テストデータをインサート");
         let item = ItemTodo {
@@ -508,11 +529,8 @@ mod test {
     async fn test_get_user_from_sess(pool: MySqlPool) {
         let db = Database::new_test(pool.clone());
 
-        println!("テスト用ユーザー及びセッションの生成");
-        let name = "test";
-        let pass = "test";
-        db.add_user(name, pass).await.unwrap();
-        let sess = db.make_new_session(name).await.unwrap();
+        let sess = login_for_test(&db).await;
+        let name = db.get_user_from_sess(sess).await.unwrap().name;
 
         let user = db.get_user_from_sess(sess).await.unwrap();
         assert_eq!(user.name, name, "これはみつかるはず");
@@ -523,5 +541,129 @@ mod test {
             Err(DbError::NotFoundSession) => {}
             Err(e) => assert!(false, "トラブルです。{e}"),
         };
+    }
+
+    #[sqlx::test]
+    async fn test_change_done(pool: MySqlPool) {
+        let db = Database::new_test(pool);
+        let sess = login_for_test(&db).await;
+        let ref_date = Local::now().date_naive();
+        create_todo_for_test(&db, sess).await;
+
+        let items = db.get_todo_item(sess, ref_date, true).await.unwrap();
+        let item = items
+            .iter()
+            .find(|&i| i.title.find("二件目").is_some())
+            .unwrap();
+        db.change_done(item.id, true).await.unwrap();
+
+        let items = db.get_todo_item(sess, ref_date, true).await.unwrap();
+        let item = items.iter().find(|&i| i.title.find("二件目").is_some());
+        assert!(item.is_none(), "状態を完了にしたので見つからないはず。");
+
+        let items = db.get_todo_item(sess, ref_date, false).await.unwrap();
+        let item = items.iter().find(|&i| i.title.find("二件目").is_some());
+        match item {
+            Some(i) => assert!(i.done, "完了済みになっているはずですね?"),
+            None => assert!(false, "状態を変えたら、レコードなくなった???"),
+        }
+        assert_eq!(
+            items.len(),
+            3,
+            "全件見ているのでレコードは3件あるはずですが?"
+        );
+    }
+
+    #[sqlx::test]
+    async fn test_get_todo_with_id(pool: MySqlPool) {
+        let db = Database::new_test(pool);
+        let sess = login_for_test(&db).await;
+        create_todo_for_test(&db, sess).await;
+
+        let items = db
+            .get_todo_item(sess, Local::now().date_naive(), false)
+            .await
+            .unwrap();
+        let id = items
+            .iter()
+            .find(|&i| i.title.find("一件目").is_some())
+            .expect("これはあるはず")
+            .id;
+        let non_exist_id = items.iter().max_by_key(|&i| i.id).unwrap().id + 1;
+
+        // 正常な読み出し
+        let res = db
+            .get_todo_item_with_id(id, sess)
+            .await
+            .expect("これは正常に読み出せるはず。エラーはだめ");
+        res.work
+            .expect("このレーコードはworkを持つはずです。")
+            .find("働いてます。")
+            .expect("workの内容がおかしい。");
+
+        // 間違ったid
+        let res = db.get_todo_item_with_id(non_exist_id, sess).await;
+        match res {
+            Ok(_) => assert!(false, "そんなIDは存在しなかったはずなのに。"),
+            Err(DbError::NotFoundTodo) => { /* 正常 */ }
+            Err(e) => assert!(false, "データベースエラーだよ。({e})"),
+        }
+
+        // 間違ったセッション
+        let res = db.get_todo_item_with_id(id, Uuid::now_v7()).await;
+        match res {
+            Ok(_) => assert!(false, "そんなセッションはないはず。"),
+            Err(DbError::NotFoundTodo) => { /* 正常 */ }
+            Err(e) => assert!(false, "データベースエラー発生。({e})"),
+        }
+    }
+
+    async fn login_for_test(db: &Database) -> Uuid {
+        println!("テスト用ユーザー及びセッションの生成");
+        let name = "test";
+        let pass = "test";
+        db.add_user(name, pass).await.unwrap();
+        db.make_new_session(name).await.unwrap()
+    }
+
+    async fn create_todo_for_test(db: &Database, sess: Uuid) {
+        let name = db.get_user_from_sess(sess).await.unwrap().name;
+
+        println!("テストデータをインサート");
+        let item = ItemTodo {
+            id: 0,
+            user_name: name.to_string(),
+            title: "一件目(work有り)".to_string(),
+            work: Some("働いてます。".to_string()),
+            update_date: None,
+            start_date: Some(Local::now().date_naive()),
+            end_date: Some(Local::now().date_naive() + Days::new(3)),
+            done: false,
+        };
+        db.add_todo_item(&item).await.unwrap();
+
+        let item = ItemTodo {
+            id: 0,
+            user_name: name.to_string(),
+            title: "二件目(work無し)".to_string(),
+            work: None,
+            update_date: None,
+            start_date: Some(Local::now().date_naive()),
+            end_date: Some(Local::now().date_naive() + Days::new(3)),
+            done: false,
+        };
+        db.add_todo_item(&item).await.unwrap();
+
+        let item = ItemTodo {
+            id: 0,
+            user_name: name.to_string(),
+            title: "三件目(work無し)".to_string(),
+            work: None,
+            update_date: None,
+            start_date: Some(Local::now().date_naive()),
+            end_date: Some(Local::now().date_naive() + Days::new(3)),
+            done: false,
+        };
+        db.add_todo_item(&item).await.unwrap();
     }
 }

@@ -39,29 +39,35 @@ pub fn run() {
             login,
             is_valid_session,
             add_todo,
+            update_done,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
+/// todoのリストを取得する。
 #[tauri::command]
 async fn get_todo_list(app_status: State<'_, AppStatus>) -> Result<Vec<ItemTodo>, String> {
     println!("todo取得");
-    let Some(sess) = get_curr_session(&app_status) else {
-        return Err("NotLogin".to_string());
+    let sess = match get_curr_session(&app_status) {
+        Some(u) => u,
+        None => return Err("NotLogin".to_string()),
     };
 
     app_status
         .todo()
-        .get_todo_list(sess)
+        .get_todo_list(sess, true)
         .await
         .map_err(|e| e.to_string())
 }
 
+/// todoを追加する。
 #[tauri::command]
 async fn add_todo(app_status: State<'_, AppStatus>, item: FormTodo) -> Result<(), String> {
-    let Some(sess) = get_curr_session(&app_status) else {
-        return Err("NotLogin".to_string());
+    let sess = match get_cur_session_with_update(&app_status).await {
+        Ok(Some(u)) => u,
+        Ok(None) => return Err("NotLogin".to_string()),
+        Err(e) => return Err(e),
     };
 
     eprintln!("input = {:?}", &item);
@@ -101,6 +107,25 @@ impl From<FormTodo> for ItemTodo {
     }
 }
 
+/// todoの完了状態を変更する。
+#[tauri::command]
+async fn update_done(app_status: State<'_, AppStatus>, id: u32, done: bool) -> Result<(), String> {
+    let sess = match get_cur_session_with_update(&app_status).await {
+        Ok(Some(s)) => s,
+        Ok(None) => return Err("NotLogin".to_string()),
+        Err(e) => return Err(e),
+    };
+    app_status
+        .todo()
+        .change_done(id, sess, done)
+        .await
+        .map_err(|e| match e {
+            TodoError::NotFoundTodo => "ignore_id".to_string(),
+            e => format!("Database Error:[{e}]"),
+        })
+}
+
+/// ユーザー登録
 #[tauri::command]
 async fn regist_user(
     app_status: State<'_, AppStatus>,
@@ -118,6 +143,7 @@ async fn regist_user(
     }
 }
 
+/// ログイン
 #[command]
 async fn login(
     app_status: State<'_, AppStatus>,
@@ -142,11 +168,20 @@ async fn login(
     Ok(session.to_string())
 }
 
+/// 現在、有効なセッションが存在するかどうか確認。(ユーザI/F用)
 #[command]
 async fn is_valid_session(app_status: State<'_, AppStatus>) -> Result<bool, String> {
-    let cur_session = get_curr_session(&app_status);
+    get_cur_session_with_update(&app_status)
+        .await
+        .map(|i| i.is_some())
+}
+
+/// 現在、有効なセッションを返す。
+/// 有効なセッションが存在すれば、セッションの更新を行い、期限を延長する。
+async fn get_cur_session_with_update(app_status: &AppStatus) -> Result<Option<Uuid>, String> {
+    let cur_session = get_curr_session(app_status);
     let Some(cur_session) = cur_session else {
-        return Ok(false);
+        return Ok(None);
     };
 
     match app_status.todo().is_valid_session(&cur_session).await {
@@ -155,13 +190,14 @@ async fn is_valid_session(app_status: State<'_, AppStatus>) -> Result<bool, Stri
             let mut cnf = app_status.config().lock().unwrap();
             cnf.set_session_id(&s);
             cnf.save().map_err(|e| format!("FailSession:{e}"))?;
-            Ok(true)
+            Ok(Some(s))
         }
-        Ok(None) => Ok(false),
+        Ok(None) => Ok(None),
         Err(e) => Err(format!("FailSession:{e}")),
     }
 }
 
+/// 現在のセッションを取得する。
 fn get_curr_session(app_status: &AppStatus) -> Option<Uuid> {
     let conf = app_status.config().lock().unwrap();
     conf.get_session_id()

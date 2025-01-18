@@ -1,8 +1,9 @@
-import { Controller, FormProvider, useForm, useFormContext } from "react-hook-form";
+import { FormProvider, useForm, useFormContext } from "react-hook-form";
 import { Button, FormControl, HStack, Input, Text, Textarea, VStack } from "@yamada-ui/react";
 import {useEffect, useState} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useNavigate } from "react-router-dom";
+import { useMutation } from "@tanstack/react-query";
 
 function AddTodo() {
     const form = useForm();
@@ -10,28 +11,25 @@ function AddTodo() {
     const [ sendMessage, setSendMessage ] = useState("");
     const navi = useNavigate();
 
-    const onSubmit = async (data) => { 
+    const send_data = async (data) => {
         const res = {item : {
             title : data.title,
             work : data.work,
             start : str2date(data.start)?.toLocaleDateString(),
             end : str2date(data.end)?.toLocaleDateString(),
         }};
-        console.log(res);
-        try {
-            setSendMessage('送信中です。');
-            await invoke('add_todo', res);
-            navi('/todo');
-        } catch (e) {
-            setSendMessage('エラーが発生しました。{' + e + '}');
-            console.log(e);
-        }
+        await invoke('add_todo', res);
     };
-
+    const {mutate, isPending} = useMutation( {
+        mutationFn: (data) => send_data(data), 
+        onSuccess: () => navi('/todo'),
+        onError: (error) => setSendMessage(error),
+    });
+        
     return (
         <>
             <FormProvider {...form}>
-                <VStack as="form" onSubmit={handleSubmit(onSubmit)}>
+                <VStack as="form" onSubmit={handleSubmit((data)=>mutate(data))}>
                     <FormControl
                         invalid={!!errors.title}
                         label="タイトル"
@@ -46,6 +44,7 @@ function AddTodo() {
                     <InputDate name="start" label="開始"/>
                     <InputDate name="end" label="終了"/>
                     <Button type="submit" w="30%" ml="auto" mr="auto">送信</Button>
+                    <Text> {isPending ? "送信中です。" : null} </Text>
                     <Text> {sendMessage} </Text>
                 </VStack>
             </FormProvider>

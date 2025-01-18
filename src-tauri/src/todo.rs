@@ -22,10 +22,14 @@ impl Todo {
     }
 
     /// todoの一覧を取得する。(仮実装。インターフェース未確定)
-    pub async fn get_todo_list(&self, sess: Uuid) -> Result<Vec<ItemTodo>, TodoError> {
+    pub async fn get_todo_list(
+        &self,
+        sess: Uuid,
+        only_imcomplete: bool,
+    ) -> Result<Vec<ItemTodo>, TodoError> {
         let ref_date = Local::now().date_naive();
         self.database
-            .get_todo_item(sess, ref_date, true)
+            .get_todo_item(sess, ref_date, only_imcomplete)
             .await
             .map_err(|e| match e {
                 DbError::FailDbAccess(e) => TodoError::FailDbAccess(e),
@@ -66,6 +70,38 @@ impl Todo {
                     TodoError::FailDbAccess(e)
                 }
                 e => unimplemented!("[add_todo]add_todo_item[{e}]"),
+            })
+    }
+
+    /// idとsessを指定してtodoを取得する。
+    /// 一致するtodoがなければ、エラー、TodoError::NotFoundTodoを返す。
+    pub async fn get_todo_with_id(&self, id: u32, sess: Uuid) -> Result<ItemTodo, TodoError> {
+        self.database
+            .get_todo_item_with_id(id, sess)
+            .await
+            .map_err(|e| match e {
+                DbError::NotFoundTodo => TodoError::NotFoundTodo,
+                DbError::FailDbAccess(e) => {
+                    error!("[Todo::get_todo_with_id]get_todo_item_with_id:[{e}])");
+                    TodoError::FailDbAccess(e)
+                }
+                e => unimplemented!("[Todo::get_todo_with_id]get_todo_item_with_id[{e}]"),
+            })
+    }
+
+    /// Todoの完了状態を変更する
+    pub async fn change_done(&self, id: u32, sess: Uuid, done: bool) -> Result<(), TodoError> {
+        self.get_todo_with_id(id, sess).await?;
+        self.database
+            .change_done(id, done)
+            .await
+            .map_err(|e| match e {
+                DbError::FailDbAccess(e) => {
+                    error!("[Todo::change_done]change_done:[{e}]");
+                    TodoError::FailDbAccess(e)
+                }
+                DbError::NotFoundTodo => TodoError::NotFoundTodo,
+                e => unimplemented!("[change_done]change_done[{e}]"),
             })
     }
 
@@ -154,6 +190,8 @@ pub enum TodoError {
     WrongPassword,
     #[error("セッションが見つかりません。")]
     NotFoundSession,
+    #[error("指定idのtodoが見つかりません。")]
+    NotFoundTodo,
     #[error("データベースアクセスに失敗")]
     FailDbAccess(sqlx::Error),
 }
@@ -265,7 +303,10 @@ mod test {
         todo.add_todo(sess, &item1)
             .await
             .expect("1件目の追加に失敗");
-        let res = todo.get_todo_list(sess).await.expect("1件目の取得に失敗");
+        let res = todo
+            .get_todo_list(sess, true)
+            .await
+            .expect("1件目の取得に失敗");
         assert_eq!(res.len(), 1, "一件目が取得できなかった?");
         assert_eq!(res[0].title, item1.title, "一件目のtitleが違う");
         assert_eq!(res[0].work, item1.work, "一件目のworkが違う");
@@ -282,7 +323,10 @@ mod test {
         todo.add_todo(sess, &item2)
             .await
             .expect("二件目の追加に失敗");
-        let res = todo.get_todo_list(sess).await.expect("二件目の取得に失敗");
+        let res = todo
+            .get_todo_list(sess, true)
+            .await
+            .expect("二件目の取得に失敗");
         assert_eq!(res.len(), 2, "二件あるはずなんだけど");
         assert!(
             res.iter()
@@ -298,7 +342,10 @@ mod test {
         todo.add_todo(sess, &item3)
             .await
             .expect("三件目の追加に失敗");
-        let res = todo.get_todo_list(sess).await.expect("三件目の取得に失敗");
+        let res = todo
+            .get_todo_list(sess, true)
+            .await
+            .expect("三件目の取得に失敗");
         assert_eq!(res.len(), 3, "三件あるはずですよ。");
         assert!(
             res.iter()
@@ -313,10 +360,96 @@ mod test {
         );
     }
 
+    #[sqlx::test]
+    async fn change_done_test(pool: MySqlPool) {
+        let todo = Todo::test_new(pool);
+        let sess = login_for_test(&todo).await;
+        create_todo_for_test(&todo, sess).await;
+
+        let items = todo.get_todo_list(sess, true).await.unwrap();
+        let item = items
+            .iter()
+            .find(|&i| i.title.find("1件目").is_some())
+            .expect("「1件目」を含むアイテムは必ずあるはず");
+        assert!(!item.done, "まだ、未完了のはずです。");
+        let id = item.id;
+        todo.change_done(id, sess, true)
+            .await
+            .expect("状態更新に失敗。あってはならない。");
+        let items = todo.get_todo_list(sess, true).await.unwrap();
+        assert_eq!(
+            items.len(),
+            2,
+            "一件完了済みにしたので、このリストは2件しかない。"
+        );
+        let items = todo.get_todo_list(sess, false).await.unwrap();
+        assert_eq!(items.len(), 3, "完了済みを含むので、3件になる。");
+        let item = items
+            .iter()
+            .find(|&i| i.id == id)
+            .expect("さっきあったidだから必ずある。");
+        assert_eq!(item.done, true, "さっき完了済みに変更した。");
+
+        let max_id = items.iter().max_by_key(|&x| x.id).unwrap().id;
+        let res = todo.change_done(max_id + 1, sess, false).await;
+        match res {
+            Ok(_) => assert!(false, "このidのtodoがあるはずがない。"),
+            Err(TodoError::NotFoundTodo) => {}
+            Err(e) => assert!(false, "このエラーもありえない。[{e}]"),
+        };
+
+        // 間違ったセッションのテスト
+        let res = todo.change_done(id, Uuid::now_v7(), true).await;
+        match res {
+            Ok(_) => assert!(false, "このセッションでは、更新を許してはいけない。"),
+            Err(TodoError::NotFoundTodo) => { /* 正常 */ }
+            Err(e) => assert!(false, "このエラーもおかしい。[{e}]"),
+        }
+    }
+
     async fn login_for_test(todo: &Todo) -> Uuid {
         let user_name = "testdayo";
         let user_pass = "passrordnona";
         todo.add_user(user_name, user_pass).await.unwrap();
         todo.login(user_name, user_pass).await.unwrap()
+    }
+
+    async fn create_todo_for_test(todo: &Todo, sess: Uuid) {
+        use chrono::Days;
+        let items = [
+            ItemTodo {
+                id: 100,
+                user_name: "kore_naihazu".to_string(),
+                title: "テストアイテム1件目".to_string(),
+                work: Some("これは、中身を入れる。".to_string()),
+                update_date: None,
+                start_date: Some(Local::now().date_naive() - Days::new(1)),
+                end_date: Some(Local::now().date_naive() + Days::new(5)),
+                done: false,
+            },
+            ItemTodo {
+                id: 100,
+                user_name: "kore_naihazu".to_string(),
+                title: "テストアイテム2件目(work=null)".to_string(),
+                work: Some("".to_string()),
+                update_date: None,
+                start_date: Some(Local::now().date_naive() - Days::new(1)),
+                end_date: Some(Local::now().date_naive() + Days::new(5)),
+                done: false,
+            },
+            ItemTodo {
+                id: 100,
+                user_name: "kore_naihazu".to_string(),
+                title: "テストアイテム3件目(work=space)".to_string(),
+                work: Some(" \t　".to_string()),
+                update_date: None,
+                start_date: Some(Local::now().date_naive() - Days::new(1)),
+                end_date: Some(Local::now().date_naive() + Days::new(5)),
+                done: false,
+            },
+        ];
+        for item in items {
+            todo.add_todo(sess, &item).await.unwrap();
+        }
     }
 }
