@@ -12,20 +12,20 @@ function Init() {
 
     const navi = useNavigate();
 
-    const { data, isSuccess, isError, error } = useQuery({
+    const { data, isFetching, isSuccess, isError, error } = useQuery({
         queryKey: ['check_login'],
         queryFn: async () => invoke('is_valid_session')
         });
 
     useEffect( () => {
-        if (isSuccess) {
+        if (isSuccess && !isFetching) {
             if (data === true) {
                 navi('/todo');
             } else {
                 navi('/login');
             }
         }
-    },[isSuccess])
+    },[isSuccess, isFetching])
 
     return (
         <>

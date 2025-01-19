@@ -7,10 +7,10 @@ mod todo;
 
 use app_status::AppStatus;
 use database::ItemTodo;
-use log::error;
+use log::{error, info};
 use serde::Deserialize;
 use setup::setup;
-use tauri::{command, State};
+use tauri::{command, Manager, State};
 use todo::TodoError;
 use uuid::Uuid;
 
@@ -29,7 +29,7 @@ pub fn run() {
         }
     };
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(app_status)
         .invoke_handler(tauri::generate_handler![
@@ -41,8 +41,16 @@ pub fn run() {
             add_todo,
             update_done,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error thile build tauri application");
+    app.run(|app, event| match event {
+        tauri::RunEvent::Exit => {
+            eprintln!("終了処理開始");
+            let state = app.state::<AppStatus>();
+            state.config().lock().unwrap().save().unwrap();
+        }
+        _ => {}
+    });
 }
 
 /// todoのリストを取得する。
@@ -164,16 +172,21 @@ async fn login(
 
     let mut cnf = app_status.config().lock().unwrap();
     cnf.set_session_id(&session);
-    cnf.save().map_err(|e| format!("OtherError:{}", e))?;
+    //cnf.save().map_err(|e| format!("OtherError:{}", e))?;
     Ok(session.to_string())
 }
 
 /// 現在、有効なセッションが存在するかどうか確認。(ユーザI/F用)
 #[command]
 async fn is_valid_session(app_status: State<'_, AppStatus>) -> Result<bool, String> {
-    get_cur_session_with_update(&app_status)
+    let sess = get_cur_session_with_update(&app_status)
         .await
-        .map(|i| i.is_some())
+        .map(|i| i.is_some());
+    match sess {
+        Ok(sess) => info!("セッション確認({})", if sess { "有効" } else { "無効" }),
+        Err(ref e) => info!("セション確認エラー({})", e),
+    }
+    sess
 }
 
 /// 現在、有効なセッションを返す。
@@ -189,7 +202,7 @@ async fn get_cur_session_with_update(app_status: &AppStatus) -> Result<Option<Uu
             // 更新されたセッションを再登録
             let mut cnf = app_status.config().lock().unwrap();
             cnf.set_session_id(&s);
-            cnf.save().map_err(|e| format!("FailSession:{e}"))?;
+            //cnf.save().map_err(|e| format!("FailSession:{e}"))?;
             Ok(Some(s))
         }
         Ok(None) => Ok(None),
