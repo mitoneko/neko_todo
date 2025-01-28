@@ -1,12 +1,15 @@
 // todoリストの各アイテム
+import {useNavigate} from "react-router-dom";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import {invoke} from "@tauri-apps/api/core";
-import { SimpleGrid, GridItem, IconButton, Text } from "@yamada-ui/react";
+import { SimpleGrid, GridItem, IconButton, Text, HStack } from "@yamada-ui/react";
 import { BsWrenchAdjustable } from "react-icons/bs";
 import { BsAlarm } from "react-icons/bs";
 import { BsEmojiGrin } from "react-icons/bs";
+import { BiPencil } from "react-icons/bi";
 
 export default function TodoItem({item}) {
+    const navi = useNavigate();
     const queyrClient = useQueryClient();
     const {mutate} = useMutation({
         mutationFn: () => {
@@ -17,7 +20,11 @@ export default function TodoItem({item}) {
         }
     });
 
-    const onClick = () => {
+    const onEditClick = () => {
+        navi("/edittodo/"+item.id);
+    }
+
+    const onDoneClick = () => {
         console.log(item.id + " : " + item.title);
         mutate();
     }
@@ -30,7 +37,7 @@ export default function TodoItem({item}) {
     const start_date = new Date(item.start_date);
     const update_date = new Date(item.update_date);
 
-    // アイコンボタンのアイコン選択
+    // 完了ボタンのアイコン選択
     let done_icon;
     if (item.done) {
         done_icon = <BsEmojiGrin/>;
@@ -44,9 +51,12 @@ export default function TodoItem({item}) {
         <>
             <SimpleGrid w="full" columns={{base: 2, md: 1}} gap="md">
                 <GridItem> 
-                    <IconButton size="xs" icon={done_icon} onClick={onClick}/>  
+                    <HStack>
+                        <IconButton size="xs" icon={done_icon} onClick={onDoneClick}/>  
+                        <IconButton size="xs" icon={<BiPencil/>} onClick={onEditClick}/>
+                    </HStack>
                 </GridItem>
-            
+                
                 <GridItem>
                     <Text fontSize="xs" align="right">
                         {update_date?.toLocaleDateString()}

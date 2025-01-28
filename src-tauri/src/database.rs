@@ -121,6 +121,34 @@ impl Database {
         }
     }
 
+    /// Todoの項目編集
+    pub async fn edit_todo(&self, item: &ItemTodo) -> Result<(), DbError> {
+        let start_date = item.start_date.unwrap_or(Local::now().date_naive());
+        let end_date = item
+            .end_date
+            .unwrap_or(NaiveDate::from_ymd_opt(9999, 12, 31).unwrap());
+
+        let sql = r#"
+            update todo 
+            set title=?, work=?, update_date=curdate(), start_date=?, end_date=? 
+            where id=?;
+            "#;
+        let res = query(sql)
+            .bind(&item.title)
+            .bind(&item.work)
+            .bind(start_date)
+            .bind(end_date)
+            .bind(item.id)
+            .execute(&self.pool)
+            .await
+            .map_err(DbError::FailDbAccess)?;
+        if res.rows_affected() > 0 {
+            Ok(())
+        } else {
+            Err(DbError::NotFoundTodo)
+        }
+    }
+
     /// ユーザーの追加
     pub async fn add_user(&self, name: &str, pass: &str) -> Result<(), DbError> {
         let sql = "insert into users(name, password) values (?, ?);";
@@ -326,9 +354,9 @@ mod test {
         assert_eq!(user.password, "password");
         let error_user = db.get_user("naiyo").await;
         match error_user {
-            Ok(_) => assert!(false, "結果が帰ってくるはずがない。"),
-            Err(DbError::NotFoundUser) => assert!(true),
-            Err(e) => assert!(false, "このエラーはおかしい。{e}"),
+            Ok(_) => unreachable!("結果が帰ってくるはずがない。"),
+            Err(DbError::NotFoundUser) => { /* 正常 */ }
+            Err(e) => unreachable!("このエラーはおかしい。{e}"),
         }
     }
 
@@ -343,14 +371,14 @@ mod test {
 
         println!("次に、普通にセッションを作ってみる。");
         let sess1 = db.make_new_session(user_name).await.unwrap();
-        println!("セッション生成成功 id=[{}]", sess1.to_string());
+        println!("セッション生成成功 id=[{}]", sess1);
 
         println!("次は、存在しないユーザーに対してセッションを生成してみる。");
         let sess2 = db.make_new_session("detarame").await;
         match sess2 {
-            Ok(_) => assert!(false, "このユーザーは存在しなかったはず。"),
-            Err(DbError::NotFoundUser) => assert!(true),
-            Err(e) => assert!(false, "このエラーもおかしい。[{}]", e),
+            Ok(_) => unreachable!("このユーザーは存在しなかったはず。"),
+            Err(DbError::NotFoundUser) => { /* 正常 */ }
+            Err(e) => unreachable!("このエラーもおかしい。[{}]", e),
         }
 
         println!("普通に、セッションを更新してみる。");
@@ -361,9 +389,9 @@ mod test {
         let sess4 = Uuid::now_v7();
         let sess5 = db.update_session(&sess4).await;
         match sess5 {
-            Ok(_) => assert!(false, "このセッションはないはずなのに。"),
-            Err(DbError::NotFoundSession) => assert!(true),
-            Err(e) => assert!(false, "セッション更新2回め。失敗するにしてもこれはない{e}"),
+            Ok(_) => unreachable!("このセッションはないはずなのに。"),
+            Err(DbError::NotFoundSession) => { /* 正常 */ }
+            Err(e) => unreachable!("セッション更新2回め。失敗するにしてもこれはない{e}"),
         }
     }
 
@@ -537,9 +565,9 @@ mod test {
         let dummy_sess = Uuid::now_v7();
         let user = db.get_user_from_sess(dummy_sess).await;
         match user {
-            Ok(_) => assert!(false, "見つかるわけないでしょう。"),
-            Err(DbError::NotFoundSession) => {}
-            Err(e) => assert!(false, "トラブルです。{e}"),
+            Ok(_) => unreachable!("見つかるわけないでしょう。"),
+            Err(DbError::NotFoundSession) => { /* 正常 */ }
+            Err(e) => unreachable!("トラブルです。{e}"),
         };
     }
 
@@ -551,21 +579,18 @@ mod test {
         create_todo_for_test(&db, sess).await;
 
         let items = db.get_todo_item(sess, ref_date, true).await.unwrap();
-        let item = items
-            .iter()
-            .find(|&i| i.title.find("二件目").is_some())
-            .unwrap();
+        let item = items.iter().find(|&i| i.title.contains("二件目")).unwrap();
         db.change_done(item.id, true).await.unwrap();
 
         let items = db.get_todo_item(sess, ref_date, true).await.unwrap();
-        let item = items.iter().find(|&i| i.title.find("二件目").is_some());
+        let item = items.iter().find(|&i| i.title.contains("二件目"));
         assert!(item.is_none(), "状態を完了にしたので見つからないはず。");
 
         let items = db.get_todo_item(sess, ref_date, false).await.unwrap();
-        let item = items.iter().find(|&i| i.title.find("二件目").is_some());
+        let item = items.iter().find(|&i| i.title.contains("二件目"));
         match item {
             Some(i) => assert!(i.done, "完了済みになっているはずですね?"),
-            None => assert!(false, "状態を変えたら、レコードなくなった???"),
+            None => unreachable!("状態を変えたら、レコードなくなった???"),
         }
         assert_eq!(
             items.len(),
@@ -586,7 +611,7 @@ mod test {
             .unwrap();
         let id = items
             .iter()
-            .find(|&i| i.title.find("一件目").is_some())
+            .find(|&i| i.title.contains("一件目"))
             .expect("これはあるはず")
             .id;
         let non_exist_id = items.iter().max_by_key(|&i| i.id).unwrap().id + 1;
@@ -604,20 +629,71 @@ mod test {
         // 間違ったid
         let res = db.get_todo_item_with_id(non_exist_id, sess).await;
         match res {
-            Ok(_) => assert!(false, "そんなIDは存在しなかったはずなのに。"),
+            Ok(_) => unreachable!("そんなIDは存在しなかったはずなのに。"),
             Err(DbError::NotFoundTodo) => { /* 正常 */ }
-            Err(e) => assert!(false, "データベースエラーだよ。({e})"),
+            Err(e) => unreachable!("データベースエラーだよ。({e})"),
         }
 
         // 間違ったセッション
         let res = db.get_todo_item_with_id(id, Uuid::now_v7()).await;
         match res {
-            Ok(_) => assert!(false, "そんなセッションはないはず。"),
+            Ok(_) => unreachable!("そんなセッションはないはず。"),
             Err(DbError::NotFoundTodo) => { /* 正常 */ }
-            Err(e) => assert!(false, "データベースエラー発生。({e})"),
+            Err(e) => unreachable!("データベースエラー発生。({e})"),
         }
     }
 
+    #[sqlx::test]
+    async fn test_edit(pool: MySqlPool) {
+        let db = Database::new_test(pool);
+        let sess = login_for_test(&db).await;
+        create_todo_for_test(&db, sess).await;
+
+        // 書き込みテスト用レコードの取得
+        let today = Local::now().date_naive();
+        let items = db.get_todo_item(sess, today, false).await.unwrap();
+        let mut item = items
+            .iter()
+            .find(|&i| i.title.contains("一件目"))
+            .expect("ないはずがない。")
+            .clone();
+        item.title = "更新しました。".to_string();
+        item.work = Some("書き換え後".to_string());
+        item.start_date = Some(today - Days::new(5));
+        item.end_date = Some(today + Days::new(10));
+        db.edit_todo(&item).await.expect("更新がエラーを起こした。");
+        // 書き込み後の照合
+        let items_new = db.get_todo_item(sess, today, false).await.unwrap();
+        let item_new = items_new
+            .iter()
+            .find(|&i| i.title.contains("更新しました。"))
+            .expect("更新されたレコードが存在しない。");
+        assert_eq!(
+            item_new.work,
+            Some("書き換え後".to_string()),
+            "更新後のworkがおかしい"
+        );
+        assert_eq!(
+            item_new.start_date,
+            Some(today - Days::new(5)),
+            "更新後のstart_dateがおかしい"
+        );
+        assert_eq!(
+            item_new.end_date,
+            Some(today + Days::new(10)),
+            "更新後のend_dateがおかしい"
+        );
+
+        // 存在しないレコードの更新
+        let id_max_plus_one = items.iter().max_by_key(|&i| i.id).unwrap().id + 1;
+        item.id = id_max_plus_one;
+        let res = db.edit_todo(&item).await;
+        match res {
+            Ok(_) => unreachable!("更新できちゃだめっ"),
+            Err(DbError::NotFoundTodo) => {}
+            Err(e) => unreachable!("db_err: {e}"),
+        }
+    }
     async fn login_for_test(db: &Database) -> Uuid {
         println!("テスト用ユーザー及びセッションの生成");
         let name = "test";

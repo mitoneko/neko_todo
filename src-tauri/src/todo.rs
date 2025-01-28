@@ -16,7 +16,7 @@ impl Todo {
     pub async fn new(host: &str, user: &str, pass: &str) -> Result<Self, TodoError> {
         let db = Database::new(host, user, pass).await.map_err(|e| match e {
             DbError::FailConnect(e2) => TodoError::DbInit(e2),
-            e => unimplemented!("[ToDo::new] Database::new()[{e}]"),
+            e => unreachable!("[ToDo::new] Database::new()[{e}]"),
         })?;
         Ok(Self { database: db })
     }
@@ -33,7 +33,7 @@ impl Todo {
             .await
             .map_err(|e| match e {
                 DbError::FailDbAccess(e) => TodoError::FailDbAccess(e),
-                e => unimplemented!("[get_todo_list]get_todo_item[{e}]"),
+                e => unreachable!("[get_todo_list]get_todo_item[{e}]"),
             })
     }
 
@@ -51,7 +51,7 @@ impl Todo {
                     error!("[Todo::add_todo]get_user_from_sess:[{e}]");
                     TodoError::FailDbAccess(e)
                 }
-                e => unimplemented!("[add_todo]get_user_from_sess[{e}]"),
+                e => unreachable!("[add_todo]get_user_from_sess[{e}]"),
             })?;
         // アイテムを登録
         let mut item = item.clone();
@@ -69,7 +69,7 @@ impl Todo {
                     error!("[Todo::add_todo]add_todo_item:[{e}]");
                     TodoError::FailDbAccess(e)
                 }
-                e => unimplemented!("[add_todo]add_todo_item[{e}]"),
+                e => unreachable!("[add_todo]add_todo_item[{e}]"),
             })
     }
 
@@ -85,7 +85,7 @@ impl Todo {
                     error!("[Todo::get_todo_with_id]get_todo_item_with_id:[{e}])");
                     TodoError::FailDbAccess(e)
                 }
-                e => unimplemented!("[Todo::get_todo_with_id]get_todo_item_with_id[{e}]"),
+                e => unreachable!("[Todo::get_todo_with_id]get_todo_item_with_id[{e}]"),
             })
     }
 
@@ -101,8 +101,27 @@ impl Todo {
                     TodoError::FailDbAccess(e)
                 }
                 DbError::NotFoundTodo => TodoError::NotFoundTodo,
-                e => unimplemented!("[change_done]change_done[{e}]"),
+                e => unreachable!("[change_done]change_done[{e}]"),
             })
+    }
+
+    /// Todoの編集を行う。
+    pub async fn edit_todo(&self, item: &ItemTodo, sess: Uuid) -> Result<(), TodoError> {
+        let mut item = item.clone();
+        if let Some(ref s) = item.work {
+            if s.trim().is_empty() {
+                item.work = None;
+            }
+        }
+        self.get_todo_with_id(item.id, sess).await?;
+        self.database.edit_todo(&item).await.map_err(|e| match e {
+            DbError::FailDbAccess(e) => {
+                error!("[Todo::edit_todo]edit_todo:[{e}]");
+                TodoError::FailDbAccess(e)
+            }
+            DbError::NotFoundTodo => TodoError::NotFoundTodo,
+            e => unreachable!("[edit_todo]edit_todo[{e}]"),
+        })
     }
 
     /// ユーザーの追加を行う。
@@ -127,7 +146,7 @@ impl Todo {
         let user = self.database.get_user(name).await.map_err(|e| match e {
             DbError::NotFoundUser => TodoError::NotFoundUser,
             DbError::FailDbAccess(e) => TodoError::FailDbAccess(e),
-            e => unimplemented!("[ToDo::login] Database::get_user:[{e}]"),
+            e => unreachable!("[ToDo::login] Database::get_user:[{e}]"),
         })?;
         if !verify(password, &user.password)? {
             return Err(TodoError::WrongPassword);
@@ -141,7 +160,7 @@ impl Todo {
                 DbError::NotFoundUser => TodoError::NotFoundUser,
                 DbError::FailDbAccess(e) => TodoError::FailDbAccess(e),
                 e => {
-                    unimplemented!("[Todo::login] Database::make_new_session:[{e}]")
+                    unreachable!("[Todo::login] Database::make_new_session:[{e}]")
                 }
             })?;
         Ok(session)
@@ -158,7 +177,7 @@ impl Todo {
             .map_err(|e| match e {
                 DbError::FailDbAccess(e) => TodoError::FailDbAccess(e),
                 e => {
-                    unimplemented!("[Todo::is_valid_session]is_session_valid:[{e}]")
+                    unreachable!("[Todo::is_valid_session]is_session_valid:[{e}]")
                 }
             })?;
         if is_valid {
@@ -167,7 +186,7 @@ impl Todo {
                 Err(DbError::NotFoundSession) => Ok(None),
                 Err(DbError::FailDbAccess(e)) => Err(TodoError::FailDbAccess(e)),
                 Err(e) => {
-                    unimplemented!("[Todo::is_valid_session]update_session:[{e}]")
+                    unreachable!("[Todo::is_valid_session]update_session:[{e}]")
                 }
             }
         } else {
@@ -178,22 +197,28 @@ impl Todo {
 
 #[derive(Error, Debug)]
 pub enum TodoError {
-    #[error("データベース初期化失敗")]
+    #[error("FailInitDatabase")]
     DbInit(sqlx::Error),
-    #[error("すでに、このユーザー名は使用されています。")]
+    #[error("DuplicateUserName")]
     DuplicateUser(sqlx::Error),
-    #[error("ユーザーパスワードのハッシュに失敗。")]
+    #[error("InvalidPassword:{0}")]
     HashUserPassword(#[from] bcrypt::BcryptError),
-    #[error("ユーザーが見つかりません。")]
+    #[error("NotFoundUser")]
     NotFoundUser,
-    #[error("パスワードが違います。")]
+    #[error("WrongPassword")]
     WrongPassword,
-    #[error("セッションが見つかりません。")]
+    #[error("NotFoundSession")]
     NotFoundSession,
-    #[error("指定idのtodoが見つかりません。")]
+    #[error("NotFoundTodo")]
     NotFoundTodo,
-    #[error("データベースアクセスに失敗")]
+    #[error("DatabaseError:{0}")]
     FailDbAccess(sqlx::Error),
+}
+
+impl From<TodoError> for String {
+    fn from(value: TodoError) -> Self {
+        value.to_string()
+    }
 }
 
 #[cfg(test)]
@@ -223,17 +248,17 @@ mod test {
         // 間違ったユーザー名でログイン
         let res = todo.login("detarame", user_pass).await;
         match res {
-            Ok(_) => assert!(false, "こんなユーザーいないのに、なんでログインできたの?"),
+            Ok(_) => unreachable!("こんなユーザーいないのに、なんでログインできたの?"),
             Err(TodoError::NotFoundUser) => {}
-            Err(e) => assert!(false, "おなしなエラーが帰ってきた。{e}"),
+            Err(e) => unreachable!("おなしなエラーが帰ってきた。{e}"),
         }
 
         // 間違ったパスワードでログイン
         let res = todo.login(user_name, "detarame").await;
         match res {
-            Ok(_) => assert!(false, "間違ったパスワードでログインできちゃだめ"),
+            Ok(_) => unreachable!("間違ったパスワードでログインできちゃだめ"),
             Err(TodoError::WrongPassword) => {}
-            Err(e) => assert!(false, "こんなえらーだめです。{e}"),
+            Err(e) => unreachable!("こんなえらーだめです。{e}"),
         }
     }
 
@@ -245,21 +270,20 @@ mod test {
         let user_name = "testdayo";
         let user_pass = "passwordnano";
 
-        todo.add_user(user_name, &user_pass).await.unwrap();
+        todo.add_user(user_name, user_pass).await.unwrap();
         let sess = todo.login(user_name, user_pass).await.unwrap();
 
         // 正しいセッションを検索する。
         let new_sess = todo.is_valid_session(&sess).await.unwrap();
         match new_sess {
             Some(s) => assert_ne!(s, sess, "ログイン後のセッションが更新されていない。"),
-            None => assert!(false, "正しいセッションが見つからなかった。"),
+            None => unreachable!("正しいセッションが見つからなかった。"),
         };
 
         // 間違ったセッションを検索する。
         let none_sess = todo.is_valid_session(&Uuid::now_v7()).await.unwrap();
-        match none_sess {
-            Some(_) => assert!(false, "こんなセッションがあるわけがない。"),
-            None => {}
+        if none_sess.is_some() {
+            unreachable!("こんなセッションがあるわけがない。");
         }
     }
 
@@ -318,7 +342,7 @@ mod test {
         );
         assert_eq!(res[0].start_date, item1.start_date, "一件目の開始日が違う");
         assert_eq!(res[0].end_date, item1.end_date, "一件目の終了日が違う");
-        assert_eq!(res[0].done, false, "一件目の完了マークが違う");
+        assert!(!res[0].done, "一件目の完了マークが違う");
 
         todo.add_todo(sess, &item2)
             .await
@@ -369,7 +393,7 @@ mod test {
         let items = todo.get_todo_list(sess, true).await.unwrap();
         let item = items
             .iter()
-            .find(|&i| i.title.find("1件目").is_some())
+            .find(|&i| i.title.contains("1件目"))
             .expect("「1件目」を含むアイテムは必ずあるはず");
         assert!(!item.done, "まだ、未完了のはずです。");
         let id = item.id;
@@ -388,22 +412,58 @@ mod test {
             .iter()
             .find(|&i| i.id == id)
             .expect("さっきあったidだから必ずある。");
-        assert_eq!(item.done, true, "さっき完了済みに変更した。");
+        assert!(item.done, "さっき完了済みに変更した。");
 
         let max_id = items.iter().max_by_key(|&x| x.id).unwrap().id;
         let res = todo.change_done(max_id + 1, sess, false).await;
         match res {
-            Ok(_) => assert!(false, "このidのtodoがあるはずがない。"),
+            Ok(_) => unreachable!("このidのtodoがあるはずがない。"),
             Err(TodoError::NotFoundTodo) => {}
-            Err(e) => assert!(false, "このエラーもありえない。[{e}]"),
+            Err(e) => unreachable!("このエラーもありえない。[{e}]"),
         };
 
         // 間違ったセッションのテスト
         let res = todo.change_done(id, Uuid::now_v7(), true).await;
         match res {
-            Ok(_) => assert!(false, "このセッションでは、更新を許してはいけない。"),
+            Ok(_) => unreachable!("このセッションでは、更新を許してはいけない。"),
             Err(TodoError::NotFoundTodo) => { /* 正常 */ }
-            Err(e) => assert!(false, "このエラーもおかしい。[{e}]"),
+            Err(e) => unreachable!("このエラーもおかしい。[{e}]"),
+        }
+    }
+
+    #[sqlx::test]
+    async fn edit_todo_test(pool: MySqlPool) {
+        let todo = Todo::test_new(pool);
+        let sess = login_for_test(&todo).await;
+        create_todo_for_test(&todo, sess).await;
+
+        let items = todo.get_todo_list(sess, false).await.unwrap();
+        let mut item = items
+            .iter()
+            .find(|&i| i.title.contains("1件目"))
+            .unwrap()
+            .clone();
+        item.title = "更新した一件目".to_string();
+        if let Err(e) = todo.edit_todo(&item, sess).await {
+            unreachable!("更新処理に失敗した。[{e}]");
+        }
+        let Some(item_new) = todo
+            .get_todo_list(sess, false)
+            .await
+            .unwrap()
+            .iter()
+            .find(|&i| i.title.contains("更新した一件目"))
+            .cloned()
+        else {
+            unreachable!("更新したレコードが見つからないよ?");
+        };
+        assert_eq!(item.id, item_new.id, "更新したレコードのidが化けてる");
+
+        // ニセセッションで試す
+        match todo.edit_todo(&item, Uuid::now_v7()).await {
+            Ok(_) => unreachable!("偽のセッションで更新成功してはならない。"),
+            Err(TodoError::NotFoundTodo) => { /* 正常 */ }
+            Err(e) => unreachable!("偽セッションのときのエラー:{e}"),
         }
     }
 

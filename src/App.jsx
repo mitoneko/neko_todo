@@ -8,6 +8,7 @@ import AddTodo from "./AddTodo.jsx";
 import Login from "./Login.jsx";
 import RegistUser from "./RegistUser.jsx";
 import Init from "./Init.jsx";
+import EditTodo from "./EditTodo";
 
 export const routes = createBrowserRouter(
     createRoutesFromElements(
@@ -18,6 +19,7 @@ export const routes = createBrowserRouter(
                 <Route path="/regist_user" element={<RegistUser/>}/>
                 <Route path="/todo" element={<TodoList/>}/>
                 <Route path="/addtodo" element={<AddTodo/>}/>
+                <Route path="/edittodo/:id" element={<EditTodo/>}/>
             </Route>
         </>
     ));

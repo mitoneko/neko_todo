@@ -11,7 +11,6 @@ use log::{error, info};
 use serde::Deserialize;
 use setup::setup;
 use tauri::{command, Manager, State};
-use todo::TodoError;
 use uuid::Uuid;
 
 #[tauri::command]
@@ -35,28 +34,28 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             get_todo_list,
+            get_todo_with_id,
             regist_user,
             login,
             is_valid_session,
             add_todo,
             update_done,
+            edit_todo,
         ])
         .build(tauri::generate_context!())
         .expect("error thile build tauri application");
-    app.run(|app, event| match event {
-        tauri::RunEvent::Exit => {
+    app.run(|app, event| {
+        if let tauri::RunEvent::Exit = event {
             eprintln!("終了処理開始");
             let state = app.state::<AppStatus>();
             state.config().lock().unwrap().save().unwrap();
         }
-        _ => {}
     });
 }
 
 /// todoのリストを取得する。
 #[tauri::command]
 async fn get_todo_list(app_status: State<'_, AppStatus>) -> Result<Vec<ItemTodo>, String> {
-    println!("todo取得");
     let sess = match get_curr_session(&app_status) {
         Some(u) => u,
         None => return Err("NotLogin".to_string()),
@@ -66,7 +65,21 @@ async fn get_todo_list(app_status: State<'_, AppStatus>) -> Result<Vec<ItemTodo>
         .todo()
         .get_todo_list(sess, true)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(Into::into)
+}
+
+/// todoアイテムを取得する
+#[tauri::command]
+async fn get_todo_with_id(app_status: State<'_, AppStatus>, id: u32) -> Result<ItemTodo, String> {
+    let Some(sess) = get_curr_session(&app_status) else {
+        return Err("NotLogin".to_string());
+    };
+
+    app_status
+        .todo()
+        .get_todo_with_id(id, sess)
+        .await
+        .map_err(Into::into)
 }
 
 /// todoを追加する。
@@ -83,36 +96,7 @@ async fn add_todo(app_status: State<'_, AppStatus>, item: FormTodo) -> Result<()
         .todo()
         .add_todo(sess, &item.into())
         .await
-        .map_err(|e| match e {
-            todo::TodoError::NotFoundSession => "NotFoundSession".to_string(),
-            e => format!("OtherError:[{e}]"),
-        })
-}
-
-/// Todo項目追加画面データ取得用
-#[derive(Deserialize, Debug, Clone)]
-struct FormTodo {
-    title: String,
-    work: Option<String>,
-    start: Option<String>,
-    end: Option<String>,
-}
-
-impl From<FormTodo> for ItemTodo {
-    fn from(val: FormTodo) -> Self {
-        let start = val.start.map(|d| d.replace("/", "-").parse().unwrap());
-        let end = val.end.map(|d| d.replace("/", "-").parse().unwrap());
-        ItemTodo {
-            id: 0,
-            user_name: "".to_string(),
-            title: val.title,
-            work: val.work,
-            update_date: None,
-            start_date: start,
-            end_date: end,
-            done: false,
-        }
-    }
+        .map_err(Into::into)
 }
 
 /// todoの完了状態を変更する。
@@ -127,10 +111,30 @@ async fn update_done(app_status: State<'_, AppStatus>, id: u32, done: bool) -> R
         .todo()
         .change_done(id, sess, done)
         .await
-        .map_err(|e| match e {
-            TodoError::NotFoundTodo => "ignore_id".to_string(),
-            e => format!("Database Error:[{e}]"),
-        })
+        .map_err(Into::into)
+}
+
+/// todoの編集を行う。
+#[tauri::command]
+async fn edit_todo(
+    app_status: State<'_, AppStatus>,
+    id: u32,
+    item: FormTodo,
+) -> Result<(), String> {
+    let sess = match get_cur_session_with_update(&app_status).await {
+        Ok(Some(u)) => u,
+        Ok(None) => return Err("NotLogin".to_string()),
+        Err(e) => return Err(e),
+    };
+
+    eprintln!("input => id: {},  item: {:?}", id, &item);
+    let mut item: ItemTodo = item.into();
+    item.id = id;
+    app_status
+        .todo()
+        .edit_todo(&item, sess)
+        .await
+        .map_err(Into::into)
 }
 
 /// ユーザー登録
@@ -140,15 +144,11 @@ async fn regist_user(
     name: String,
     password: String,
 ) -> Result<(), String> {
-    match app_status.todo().add_user(&name, &password).await {
-        Ok(_) => Ok(()),
-        Err(e) => match e {
-            TodoError::DuplicateUser(_) => Err("DuplicateUser".to_string()),
-            TodoError::HashUserPassword(e) => Err(format!("InvalidPassword.[{}]", e)),
-            TodoError::FailDbAccess(e) => Err(e.to_string()),
-            _ => unimplemented!("[lib.rs regist_user] add_user返り値異常"),
-        },
-    }
+    app_status
+        .todo()
+        .add_user(&name, &password)
+        .await
+        .map_err(Into::into)
 }
 
 /// ログイン
@@ -158,17 +158,7 @@ async fn login(
     name: String,
     password: String,
 ) -> Result<String, String> {
-    let session = app_status
-        .todo()
-        .login(&name, &password)
-        .await
-        .map_err(|e| match e {
-            TodoError::NotFoundUser => "NotFoundUser.".to_string(),
-            TodoError::HashUserPassword(e) => format!("InvalidPassword.[{}]", e),
-            TodoError::WrongPassword => "WrongPassword".to_string(),
-            TodoError::FailDbAccess(e) => format!("OtherError:{}", e),
-            _ => unimplemented!("[lib.rs::login] loginから予期しないエラー"),
-        })?;
+    let session = app_status.todo().login(&name, &password).await?;
 
     let mut cnf = app_status.config().lock().unwrap();
     cnf.set_session_id(&session);
@@ -214,4 +204,30 @@ async fn get_cur_session_with_update(app_status: &AppStatus) -> Result<Option<Uu
 fn get_curr_session(app_status: &AppStatus) -> Option<Uuid> {
     let conf = app_status.config().lock().unwrap();
     conf.get_session_id()
+}
+
+/// Todo項目追加画面データ取得用
+#[derive(Deserialize, Debug, Clone)]
+struct FormTodo {
+    title: String,
+    work: Option<String>,
+    start: Option<String>,
+    end: Option<String>,
+}
+
+impl From<FormTodo> for ItemTodo {
+    fn from(val: FormTodo) -> Self {
+        let start = val.start.map(|d| d.replace("/", "-").parse().unwrap());
+        let end = val.end.map(|d| d.replace("/", "-").parse().unwrap());
+        ItemTodo {
+            id: 0,
+            user_name: "".to_string(),
+            title: val.title,
+            work: val.work,
+            update_date: None,
+            start_date: start,
+            end_date: end,
+            done: false,
+        }
+    }
 }
