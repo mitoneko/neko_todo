@@ -21,7 +21,8 @@ fn main() {
                 message
             ))
         })
-        .level(log::LevelFilter::Info)
+        //.level(log::LevelFilter::Info)
+        .level(log::LevelFilter::Debug)
         .chain(std::io::stderr())
         .chain(fern::log_file(log_file).unwrap())
         .apply()
