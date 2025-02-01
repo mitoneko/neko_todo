@@ -1,6 +1,6 @@
 //! アプリケーション設定の取得関係
 
-use directories::BaseDirs;
+use directories::ProjectDirs;
 use std::{
     fs::OpenOptions,
     io::{BufWriter, ErrorKind, Result, Write},
@@ -9,7 +9,6 @@ use std::{
 use uuid::Uuid;
 
 const CONF_FILE_NAME: &str = "neko_todo.conf";
-const CONF_DIR_NAME: &str = "neko_todo";
 const DB_HOST: &str = "NEKO_DB_DB_HOST";
 const DB_USER: &str = "NEKO_DB_DB_USER";
 const DB_PASS: &str = "NEKO_DB_DB_PASS";
@@ -98,11 +97,14 @@ impl NekoTodoConfig {
     /// 必要に応じて、コンフィグファイル用のディレクトリ("neko_todo")を生成し
     /// さらに、存在しなければ、空のコンフィグファイル("neko_todo.conf")を生成する。
     fn get_config_file_path() -> Result<PathBuf> {
+        use std::io;
         // 環境依存コンフィグ用ディレクトリの取得
-        let mut path: PathBuf = BaseDirs::new().unwrap().config_dir().into();
         // 必要であれば、自分用のディレクトリを生成する。
         // ここでエラーになるのは、OSシステムに問題がある。
-        path.push(CONF_DIR_NAME);
+        let mut path: PathBuf = ProjectDirs::from("jp", "laki", "nekotodo")
+            .ok_or(io::Error::new(ErrorKind::Other, "Not Found Home"))?
+            .config_dir()
+            .into();
         if let Err(e) = std::fs::create_dir(&path) {
             if e.kind() != ErrorKind::AlreadyExists {
                 return Err(e);

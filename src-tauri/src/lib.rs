@@ -46,7 +46,7 @@ pub fn run() {
         .expect("error thile build tauri application");
     app.run(|app, event| {
         if let tauri::RunEvent::Exit = event {
-            eprintln!("終了処理開始");
+            info!("終了処理開始");
             let state = app.state::<AppStatus>();
             state.config().lock().unwrap().save().unwrap();
         }
