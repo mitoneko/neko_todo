@@ -1,6 +1,6 @@
 //! アプリケーション環境の構築を実施する
 use clap::Parser;
-use log::error;
+use log::{error, info};
 use std::process::exit;
 use tauri::async_runtime::block_on;
 use thiserror::Error;
@@ -47,15 +47,15 @@ fn database_param_setup(args: &Args) -> Result<(), SetupError> {
     };
 
     // 一度試しに接続してみる。
-    eprintln!("次のパラメータを使用します。");
-    eprintln!("ホスト名:{}", host);
-    eprintln!("ユーザー名:{}", user);
-    eprintln!("パスワード:{}", pass);
-    eprintln!("データベースへの接続を試行します。");
+    info!("次のパラメータを使用します。");
+    info!("ホスト名:{}", host);
+    info!("ユーザー名:{}", user);
+    info!("パスワード:{}", pass);
+    info!("データベースへの接続を試行します。");
     block_on(async { Todo::new(host, user, pass).await })?;
 
-    eprintln!("データベースへの接続に成功しました。");
-    eprintln!("設定ファイルに接続情報を保存します。");
+    info!("データベースへの接続に成功しました。");
+    info!("設定ファイルに接続情報を保存します。");
     {
         let mut conf = match NekoTodoConfig::new() {
             Ok(c) => Ok(c),

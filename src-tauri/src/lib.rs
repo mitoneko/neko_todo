@@ -7,7 +7,7 @@ mod todo;
 
 use app_status::AppStatus;
 use database::ItemTodo;
-use log::{error, info};
+use log::{debug, error, info};
 use serde::Deserialize;
 use setup::setup;
 use tauri::{command, Manager, State};
@@ -46,7 +46,7 @@ pub fn run() {
         .expect("error thile build tauri application");
     app.run(|app, event| {
         if let tauri::RunEvent::Exit = event {
-            eprintln!("終了処理開始");
+            info!("終了処理開始");
             let state = app.state::<AppStatus>();
             state.config().lock().unwrap().save().unwrap();
         }
@@ -91,7 +91,7 @@ async fn add_todo(app_status: State<'_, AppStatus>, item: FormTodo) -> Result<()
         Err(e) => return Err(e),
     };
 
-    eprintln!("input = {:?}", &item);
+    debug!("input = {:?}", &item);
     app_status
         .todo()
         .add_todo(sess, &item.into())
@@ -127,7 +127,7 @@ async fn edit_todo(
         Err(e) => return Err(e),
     };
 
-    eprintln!("input => id: {},  item: {:?}", id, &item);
+    debug!("input => id: {},  item: {:?}", id, &item);
     let mut item: ItemTodo = item.into();
     item.id = id;
     app_status
