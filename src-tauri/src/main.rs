@@ -8,6 +8,9 @@ fn main() {
         .unwrap()
         .config_dir()
         .into();
+    if !log_file.exists() {
+        std::fs::create_dir_all(&log_file).unwrap();
+    }
     log_file.push("nekotodo.log");
 
     fern::Dispatch::new()
