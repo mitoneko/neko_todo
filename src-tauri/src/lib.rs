@@ -41,6 +41,7 @@ pub fn run() {
             add_todo,
             update_done,
             edit_todo,
+            set_is_incomplete,
         ])
         .build(tauri::generate_context!())
         .expect("error thile build tauri application");
@@ -61,9 +62,14 @@ async fn get_todo_list(app_status: State<'_, AppStatus>) -> Result<Vec<ItemTodo>
         None => return Err("NotLogin".to_string()),
     };
 
+    let is_incomplete = {
+        let conf = app_status.config().lock().unwrap();
+        conf.get_is_incomplete()
+    };
+
     app_status
         .todo()
-        .get_todo_list(sess, true)
+        .get_todo_list(sess, is_incomplete)
         .await
         .map_err(Into::into)
 }
@@ -135,6 +141,13 @@ async fn edit_todo(
         .edit_todo(&item, sess)
         .await
         .map_err(Into::into)
+}
+
+/// 完了済みのみを表示するかどうかを設定する。
+#[tauri::command]
+fn set_is_incomplete(app_status: State<'_, AppStatus>, is_incomplete: bool) {
+    let mut conf = app_status.config().lock().unwrap();
+    conf.set_is_incomplete(is_incomplete);
 }
 
 /// ユーザー登録
