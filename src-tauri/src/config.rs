@@ -21,6 +21,7 @@ pub struct NekoTodoConfig {
     db_pass: String,
     session_id: Option<Uuid>,
     dirty: bool,
+    is_incomplete: bool,
 }
 
 impl NekoTodoConfig {
@@ -37,6 +38,7 @@ impl NekoTodoConfig {
             db_pass: std::env::var(DB_PASS).unwrap_or_default(),
             session_id,
             dirty: false,
+            is_incomplete: true,
         })
     }
 
@@ -54,6 +56,10 @@ impl NekoTodoConfig {
 
     pub fn get_session_id(&self) -> Option<Uuid> {
         self.session_id
+    }
+
+    pub fn get_is_incomplete(&self) -> bool {
+        self.is_incomplete
     }
 
     pub fn set_db_host(&mut self, val: &str) {
@@ -74,6 +80,10 @@ impl NekoTodoConfig {
     pub fn set_session_id(&mut self, uuid: &Uuid) {
         self.session_id = Some(*uuid);
         self.dirty = true;
+    }
+
+    pub fn set_is_incomplete(&mut self, is_incomplete: bool) {
+        self.is_incomplete = is_incomplete;
     }
 
     pub fn save(&mut self) -> Result<()> {
