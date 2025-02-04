@@ -3,10 +3,11 @@ import {useNavigate} from "react-router-dom";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import {invoke} from "@tauri-apps/api/core";
 import { SimpleGrid, GridItem, IconButton, Text, HStack } from "@yamada-ui/react";
-import { BsWrenchAdjustable } from "react-icons/bs";
+import { GrWorkshop } from "react-icons/gr";
 import { BsAlarm } from "react-icons/bs";
 import { BsEmojiGrin } from "react-icons/bs";
 import { BiPencil } from "react-icons/bi";
+import { FaRegCopy } from "react-icons/fa6";
 
 export default function TodoItem({item}) {
     const navi = useNavigate();
@@ -22,6 +23,10 @@ export default function TodoItem({item}) {
 
     const onEditClick = () => {
         navi("/edittodo/"+item.id);
+    }
+
+    const onPasteClick = () => {
+        navi("/pastetodo/"+item.id);
     }
 
     const onDoneClick = () => {
@@ -44,7 +49,7 @@ export default function TodoItem({item}) {
     } else if (!!end_date && geDate(new Date(), end_date)) {
         done_icon = <BsAlarm/>;
     } else {
-        done_icon = <BsWrenchAdjustable/>
+        done_icon = <GrWorkshop/>
     }
 
     return (
@@ -54,6 +59,7 @@ export default function TodoItem({item}) {
                     <HStack>
                         <IconButton size="xs" icon={done_icon} onClick={onDoneClick}/>  
                         <IconButton size="xs" icon={<BiPencil/>} onClick={onEditClick}/>
+                        <IconButton size="xs" icon={<FaRegCopy/>} onClick={onPasteClick}/>
                     </HStack>
                 </GridItem>
                 
