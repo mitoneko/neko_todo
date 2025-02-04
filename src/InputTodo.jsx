@@ -20,9 +20,11 @@ export function InputTodo({send_data, init_val}) {
 
     const {mutate, isPending} = useMutation( {
         mutationFn: (data) => send_data(data),
-        onSuccess: () => navi('/todo'),
+        onSuccess: () => navi('/'),
         onError: (error) => setErrorMessage(error),
     });
+
+    const onCancelClick = () => { navi('/'); };
 
     return (
         <>
@@ -41,7 +43,10 @@ export function InputTodo({send_data, init_val}) {
                     </FormControl>
                     <InputDate name="start" label="開始"/>
                     <InputDate name="end" label="終了"/>
-                    <Button type="submit" w="30%" ml="auto" mr="auto">送信</Button>
+                    <HStack>
+                        <Button type="submit" w="30%" ml="auto" mr="5%">送信</Button>
+                        <Button w="30%" onClick={onCancelClick} mr="auto">キャンセル</Button>
+                    </HStack>
                     <Text> {isPending ? "送信中です。" : null} </Text>
                     <Text> {errorMessage} </Text>
                 </VStack>
