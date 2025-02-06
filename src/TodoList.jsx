@@ -56,7 +56,6 @@ function TodoList() {
                     )}
                 )}
             </Grid>
-            <Text> すべて表示スイッチの状態は、{IsIncomplete ? "On" : "Off"} です。</Text>
         </>
     );
 }

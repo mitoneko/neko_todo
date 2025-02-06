@@ -71,10 +71,11 @@ impl Database {
             where s.id=? and t.start_date <= ? 
             "#;
         let sql2 = " and done = false";
+        let sql3 = " order by end_date, update_date";
         let sql = if only_incomplete {
-            format!("{} {};", sql1, sql2)
+            format!("{} {} {};", sql1, sql2, sql3)
         } else {
-            format!("{} ;", sql1)
+            format!("{} {};", sql1, sql3)
         };
         let items = query_as::<_, ItemTodo>(&sql)
             .bind(sess.to_string())
