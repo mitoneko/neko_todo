@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Grid, GridItem, HStack, IconButton, Switch, Text} from "@yamada-ui/react";
+import { Container, Grid, GridItem, HStack, IconButton, Switch } from "@yamada-ui/react";
 import { invoke } from "@tauri-apps/api/core";
 import { AiOutlineFileAdd } from "react-icons/ai";
 import { useState } from "react";
@@ -39,23 +39,25 @@ function TodoList() {
     console.log(todos);
     return (
         <>
-            <HStack>
-                <IconButton icon={<AiOutlineFileAdd/>} onClick={handleAddTodo}/>
-                <Switch checked={IsIncomplete} onChange={onIsIncompleteChange}>
-                    未完了のみ
-                </Switch>
-            </HStack>
+            <Container gap="0" bg="backgound">
+                <HStack>
+                    <IconButton icon={<AiOutlineFileAdd/>} onClick={handleAddTodo}/>
+                    <Switch checked={IsIncomplete} onChange={onIsIncompleteChange}>
+                        未完了のみ
+                    </Switch>
+                </HStack>
 
-            <h1>現在の予定</h1>
-            <Grid templateColumns="repeat(4, 1fr)" gap="md">
-                {todos?.map( todo_item => {
-                    return (
-                        <GridItem key={todo_item.id} w="full" rounded="md" bg="primary">
-                            <TodoItem item={todo_item}/>
-                        </GridItem>
+                <h1>現在の予定</h1>
+                <Grid templateColumns="repeat(4, 1fr)" gap="md" >
+                    {todos?.map( todo_item => {
+                        return (
+                            <GridItem key={todo_item.id} w="full" rounded="md" bg="primary">
+                                <TodoItem item={todo_item}/>
+                            </GridItem>
+                        )}
                     )}
-                )}
-            </Grid>
+                </Grid>
+            </Container>
         </>
     );
 }

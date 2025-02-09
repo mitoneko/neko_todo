@@ -1,6 +1,6 @@
 export const globalStyle = {
     body: {
-        bg: ["#DCB879"],
+        bg: ["backgound"],
         height: "100vh",
     },
 }
