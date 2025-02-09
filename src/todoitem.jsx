@@ -2,7 +2,7 @@
 import {useNavigate} from "react-router-dom";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import {invoke} from "@tauri-apps/api/core";
-import { SimpleGrid, GridItem, IconButton, Text, HStack } from "@yamada-ui/react";
+import { SimpleGrid, GridItem, IconButton, Text, HStack, Container } from "@yamada-ui/react";
 import { GrWorkshop } from "react-icons/gr";
 import { BsAlarm } from "react-icons/bs";
 import { BsEmojiGrin } from "react-icons/bs";
@@ -52,14 +52,31 @@ export default function TodoItem({item}) {
         done_icon = <GrWorkshop/>
     }
 
+    // 上部バーの背景色
+    const oneday = 24 * 60 * 60 * 1000;
+    const today = new Date();
+    const delivery = new Date(item.end_date);
+    const daysToDelivery = (delivery - today) / oneday;
+    let line_color;
+    if (daysToDelivery < 0) {
+        line_color = "danger";
+    } else if (daysToDelivery < 2) {
+        line_color = "warning";
+    } else {
+        line_color = "success";
+    }
+
     return (
-        <>
-            <SimpleGrid w="full" columns={{base: 2, md: 1}} gap="md">
+        <Container p="1%" gap="0">
+            <SimpleGrid w="full" columns={{base: 2, md: 1}} gap="md" bg={line_color}>
                 <GridItem> 
                     <HStack>
-                        <IconButton size="xs" icon={done_icon} onClick={onDoneClick}/>  
-                        <IconButton size="xs" icon={<BiPencil/>} onClick={onEditClick}/>
-                        <IconButton size="xs" icon={<FaRegCopy/>} onClick={onPasteClick}/>
+                        <IconButton size="xs" icon={done_icon} onClick={onDoneClick} 
+                            bg={line_color}/>  
+                        <IconButton size="xs" icon={<BiPencil/>} onClick={onEditClick} 
+                            bg={line_color}/>
+                        <IconButton size="xs" icon={<FaRegCopy/>} onClick={onPasteClick} 
+                            bg={line_color}/>
                     </HStack>
                 </GridItem>
                 
@@ -78,7 +95,7 @@ export default function TodoItem({item}) {
             <Text fontSize="sm">
                 {start_date?.toLocaleDateString()} 〜 {end_date?.toLocaleDateString()}
             </Text>
-        </>
+        </Container>
     );
 }
 
