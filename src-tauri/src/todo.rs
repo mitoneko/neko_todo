@@ -4,7 +4,7 @@ use log::error;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::database::*;
+use crate::{config::ItemSortOrder, database::*};
 
 /// todoリストの処理全般
 pub struct Todo {
@@ -26,10 +26,11 @@ impl Todo {
         &self,
         sess: Uuid,
         only_imcomplete: bool,
+        sort_order: ItemSortOrder,
     ) -> Result<Vec<ItemTodo>, TodoError> {
         let ref_date = Local::now().date_naive();
         self.database
-            .get_todo_item(sess, ref_date, only_imcomplete)
+            .get_todo_item(sess, ref_date, only_imcomplete, sort_order)
             .await
             .map_err(|e| match e {
                 DbError::FailDbAccess(e) => TodoError::FailDbAccess(e),
@@ -328,7 +329,7 @@ mod test {
             .await
             .expect("1件目の追加に失敗");
         let res = todo
-            .get_todo_list(sess, true)
+            .get_todo_list(sess, true, ItemSortOrder::EndAsc)
             .await
             .expect("1件目の取得に失敗");
         assert_eq!(res.len(), 1, "一件目が取得できなかった?");
@@ -348,7 +349,7 @@ mod test {
             .await
             .expect("二件目の追加に失敗");
         let res = todo
-            .get_todo_list(sess, true)
+            .get_todo_list(sess, true, ItemSortOrder::EndAsc)
             .await
             .expect("二件目の取得に失敗");
         assert_eq!(res.len(), 2, "二件あるはずなんだけど");
@@ -367,7 +368,7 @@ mod test {
             .await
             .expect("三件目の追加に失敗");
         let res = todo
-            .get_todo_list(sess, true)
+            .get_todo_list(sess, true, ItemSortOrder::EndAsc)
             .await
             .expect("三件目の取得に失敗");
         assert_eq!(res.len(), 3, "三件あるはずですよ。");
@@ -390,7 +391,10 @@ mod test {
         let sess = login_for_test(&todo).await;
         create_todo_for_test(&todo, sess).await;
 
-        let items = todo.get_todo_list(sess, true).await.unwrap();
+        let items = todo
+            .get_todo_list(sess, true, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         let item = items
             .iter()
             .find(|&i| i.title.contains("1件目"))
@@ -400,13 +404,19 @@ mod test {
         todo.change_done(id, sess, true)
             .await
             .expect("状態更新に失敗。あってはならない。");
-        let items = todo.get_todo_list(sess, true).await.unwrap();
+        let items = todo
+            .get_todo_list(sess, true, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         assert_eq!(
             items.len(),
             2,
             "一件完了済みにしたので、このリストは2件しかない。"
         );
-        let items = todo.get_todo_list(sess, false).await.unwrap();
+        let items = todo
+            .get_todo_list(sess, false, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         assert_eq!(items.len(), 3, "完了済みを含むので、3件になる。");
         let item = items
             .iter()
@@ -437,7 +447,10 @@ mod test {
         let sess = login_for_test(&todo).await;
         create_todo_for_test(&todo, sess).await;
 
-        let items = todo.get_todo_list(sess, false).await.unwrap();
+        let items = todo
+            .get_todo_list(sess, false, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         let mut item = items
             .iter()
             .find(|&i| i.title.contains("1件目"))
@@ -448,7 +461,7 @@ mod test {
             unreachable!("更新処理に失敗した。[{e}]");
         }
         let Some(item_new) = todo
-            .get_todo_list(sess, false)
+            .get_todo_list(sess, false, ItemSortOrder::EndAsc)
             .await
             .unwrap()
             .iter()

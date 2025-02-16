@@ -11,6 +11,8 @@ use sqlx::{
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::config::ItemSortOrder;
+
 /// neko_dbデータベース操作関数郡
 #[derive(Clone, Debug)]
 pub struct Database {
@@ -64,6 +66,7 @@ impl Database {
         sess: Uuid,
         ref_date: NaiveDate,
         only_incomplete: bool,
+        sort_order: ItemSortOrder,
     ) -> Result<Vec<ItemTodo>, DbError> {
         let sql1 = r#"
             select t.id, t.user_name, title, work, update_date, start_date, end_date, done 
@@ -71,7 +74,14 @@ impl Database {
             where s.id=? and t.start_date <= ? 
             "#;
         let sql2 = " and done = false";
-        let sql3 = " order by end_date, update_date";
+        let sql3 = match sort_order {
+            ItemSortOrder::EndAsc => " order by end_date, update_date",
+            ItemSortOrder::EndDesc => " order by end_date desc,  update_date",
+            ItemSortOrder::StartAsc => " order by start_date, update_date",
+            ItemSortOrder::StartDesc => " order by start_date desc, update_date",
+            ItemSortOrder::UpdateAsc => " order by update_date, end_date",
+            ItemSortOrder::UpdateDesc => " order by update_date desc, end_date",
+        };
         let sql = if only_incomplete {
             format!("{} {} {};", sql1, sql2, sql3)
         } else {
@@ -439,7 +449,10 @@ mod test {
 
         println!("テストデータを読み出す。一件しかないはず");
         let last_day = Local::now().date_naive() + Days::new(1);
-        let res = db.get_todo_item(sess, last_day, true).await.unwrap();
+        let res = db
+            .get_todo_item(sess, last_day, true, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         assert_eq!(res.len(), 1, "あれ?一件のはずだよ");
         item.id = res[0].id;
         item.update_date = Some(Local::now().date_naive());
@@ -469,7 +482,10 @@ mod test {
 
         println!("テストデータを読み出す。一件しかないはず");
         let last_day = Local::now().date_naive() + Days::new(1);
-        let res = db.get_todo_item(sess, last_day, true).await.unwrap();
+        let res = db
+            .get_todo_item(sess, last_day, true, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         assert_eq!(res.len(), 1, "あれ?一件のはずだよ");
         item.id = res[0].id;
         item.update_date = Some(Local::now().date_naive());
@@ -499,17 +515,29 @@ mod test {
 
         println!("テストデータを読み出す。一件しかないはず");
         let last_day = Local::now().date_naive() + Days::new(1);
-        let res = db.get_todo_item(sess, last_day, false).await.unwrap();
+        let res = db
+            .get_todo_item(sess, last_day, false, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         assert_eq!(res.len(), 1, "全部読み出しだけど一件あるはず。");
-        let res = db.get_todo_item(sess, last_day, true).await.unwrap();
+        let res = db
+            .get_todo_item(sess, last_day, true, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         assert_eq!(res.len(), 1, "未完了だけだけど、一件あるはず。");
 
         println!("今作ったjobを完了済みにする。");
         let sql = "update todo set done=true where id=?;";
         query(sql).bind(res[0].id).execute(&pool).await.unwrap();
-        let res = db.get_todo_item(sess, last_day, false).await.unwrap();
+        let res = db
+            .get_todo_item(sess, last_day, false, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         assert_eq!(res.len(), 1, "全部読み出しだけど一件あるはず。");
-        let res = db.get_todo_item(sess, last_day, true).await.unwrap();
+        let res = db
+            .get_todo_item(sess, last_day, true, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         assert_eq!(res.len(), 0, "未完了だけだけだから、なにもないはず。");
     }
 
@@ -535,20 +563,23 @@ mod test {
         db.add_todo_item(&item).await.unwrap();
 
         let ref_date = Local::now().date_naive();
-        let res = db.get_todo_item(sess, ref_date, true).await.unwrap();
+        let res = db
+            .get_todo_item(sess, ref_date, true, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         assert_eq!(res.len(), 1, "基準日と開始日が同じだからみつかる。");
         let res = db
-            .get_todo_item(sess, ref_date + Days::new(1), true)
+            .get_todo_item(sess, ref_date + Days::new(1), true, ItemSortOrder::EndAsc)
             .await
             .unwrap();
         assert_eq!(res.len(), 1, "開始日の翌日が基準日だからみつかる。");
         let res = db
-            .get_todo_item(sess, ref_date - Days::new(1), true)
+            .get_todo_item(sess, ref_date - Days::new(1), true, ItemSortOrder::EndAsc)
             .await
             .unwrap();
         assert_eq!(res.len(), 0, "基準日が開始日の前日だからみつからない。");
         let res = db
-            .get_todo_item(sess, ref_date + Days::new(4), true)
+            .get_todo_item(sess, ref_date + Days::new(4), true, ItemSortOrder::EndAsc)
             .await
             .unwrap();
         assert_eq!(res.len(), 1, "基準日が期限を過ぎているけどみつかるの。");
@@ -579,15 +610,24 @@ mod test {
         let ref_date = Local::now().date_naive();
         create_todo_for_test(&db, sess).await;
 
-        let items = db.get_todo_item(sess, ref_date, true).await.unwrap();
+        let items = db
+            .get_todo_item(sess, ref_date, true, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         let item = items.iter().find(|&i| i.title.contains("二件目")).unwrap();
         db.change_done(item.id, true).await.unwrap();
 
-        let items = db.get_todo_item(sess, ref_date, true).await.unwrap();
+        let items = db
+            .get_todo_item(sess, ref_date, true, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         let item = items.iter().find(|&i| i.title.contains("二件目"));
         assert!(item.is_none(), "状態を完了にしたので見つからないはず。");
 
-        let items = db.get_todo_item(sess, ref_date, false).await.unwrap();
+        let items = db
+            .get_todo_item(sess, ref_date, false, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         let item = items.iter().find(|&i| i.title.contains("二件目"));
         match item {
             Some(i) => assert!(i.done, "完了済みになっているはずですね?"),
@@ -607,7 +647,12 @@ mod test {
         create_todo_for_test(&db, sess).await;
 
         let items = db
-            .get_todo_item(sess, Local::now().date_naive(), false)
+            .get_todo_item(
+                sess,
+                Local::now().date_naive(),
+                false,
+                ItemSortOrder::EndAsc,
+            )
             .await
             .unwrap();
         let id = items
@@ -652,7 +697,10 @@ mod test {
 
         // 書き込みテスト用レコードの取得
         let today = Local::now().date_naive();
-        let items = db.get_todo_item(sess, today, false).await.unwrap();
+        let items = db
+            .get_todo_item(sess, today, false, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         let mut item = items
             .iter()
             .find(|&i| i.title.contains("一件目"))
@@ -664,7 +712,10 @@ mod test {
         item.end_date = Some(today + Days::new(10));
         db.edit_todo(&item).await.expect("更新がエラーを起こした。");
         // 書き込み後の照合
-        let items_new = db.get_todo_item(sess, today, false).await.unwrap();
+        let items_new = db
+            .get_todo_item(sess, today, false, ItemSortOrder::EndAsc)
+            .await
+            .unwrap();
         let item_new = items_new
             .iter()
             .find(|&i| i.title.contains("更新しました。"))
@@ -695,6 +746,140 @@ mod test {
             Err(e) => unreachable!("db_err: {e}"),
         }
     }
+
+    #[sqlx::test]
+    async fn test_sort_end_date(pool: MySqlPool) {
+        let db = Database::new_test(pool);
+        let sess = login_for_test(&db).await;
+        create_todo_for_test(&db, sess).await;
+
+        let today = Local::now().date_naive();
+        let recs = db
+            .get_todo_item(sess, today, false, ItemSortOrder::EndAsc)
+            .await
+            .expect("取得時にエラーを起こした。");
+        eprintln!("取得データ(昇順)");
+        eprintln!("0 => {:?}", recs[0]);
+        eprintln!("1 => {:?}", recs[1]);
+        eprintln!("2 => {:?}", recs[2]);
+        assert!(
+            recs[0].end_date <= recs[1].end_date,
+            "終了日が昇順になってない。"
+        );
+        assert!(
+            recs[1].end_date <= recs[2].end_date,
+            "終了日が昇順になってない(2)。"
+        );
+
+        let recs = db
+            .get_todo_item(sess, today, false, ItemSortOrder::EndDesc)
+            .await
+            .expect("取得時にエラーを起こした(2)");
+        eprintln!("取得データ(降順)");
+        eprintln!("0 => {:?}", recs[0]);
+        eprintln!("1 => {:?}", recs[1]);
+        eprintln!("2 => {:?}", recs[2]);
+        assert!(
+            recs[0].end_date >= recs[1].end_date,
+            "終了日が降順になってない(1)"
+        );
+        assert!(
+            recs[1].end_date >= recs[2].end_date,
+            "終了日が降順になってない(2)"
+        );
+    }
+
+    #[sqlx::test]
+    async fn test_sort_start_date(pool: MySqlPool) {
+        let db = Database::new_test(pool);
+        let sess = login_for_test(&db).await;
+        create_todo_for_test(&db, sess).await;
+
+        let today = Local::now().date_naive();
+        let recs = db
+            .get_todo_item(sess, today, false, ItemSortOrder::StartAsc)
+            .await
+            .expect("取得時にエラーを起こした。");
+        assert!(
+            recs[0].start_date <= recs[1].start_date,
+            "開始日が昇順になってない。"
+        );
+        assert!(
+            recs[1].start_date <= recs[2].start_date,
+            "開始日が昇順になってない(2)。"
+        );
+
+        let recs = db
+            .get_todo_item(sess, today, false, ItemSortOrder::StartDesc)
+            .await
+            .expect("取得時にエラーを起こした(2)");
+        assert!(
+            recs[0].start_date >= recs[1].start_date,
+            "開始日が降順になってない(1)"
+        );
+        assert!(
+            recs[1].start_date >= recs[2].start_date,
+            "開始日が降順になってない(2)"
+        );
+    }
+
+    #[sqlx::test]
+    async fn test_sort_update_date(pool: MySqlPool) {
+        let db = Database::new_test(pool);
+        let sess = login_for_test(&db).await;
+        create_todo_for_test(&db, sess).await;
+        let today = Local::now().date_naive();
+
+        // Databaseのインターフェースでupdate_dateを更新するすべはないので直接編集
+        let keys = db
+            .get_todo_item(sess, today, false, ItemSortOrder::EndAsc)
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.id)
+            .collect::<Vec<_>>();
+        let sql = "update todo set update_date = ? where id = ?";
+        let days = vec![
+            today + Days::new(2),
+            today + Days::new(1),
+            today + Days::new(3),
+        ];
+        for i in 0..3 {
+            query(sql)
+                .bind(days[i])
+                .bind(keys[i])
+                .execute(&db.pool)
+                .await
+                .unwrap();
+        }
+
+        let recs = db
+            .get_todo_item(sess, today, false, ItemSortOrder::UpdateAsc)
+            .await
+            .expect("取得時にエラーを起こした。");
+        assert!(
+            recs[0].update_date <= recs[1].update_date,
+            "更新日が昇順になってない。"
+        );
+        assert!(
+            recs[1].update_date <= recs[2].update_date,
+            "更新日が昇順になってない(2)。"
+        );
+
+        let recs = db
+            .get_todo_item(sess, today, false, ItemSortOrder::UpdateDesc)
+            .await
+            .expect("取得時にエラーを起こした(2)");
+        assert!(
+            recs[0].update_date >= recs[1].update_date,
+            "更新日が降順になってない(1)"
+        );
+        assert!(
+            recs[1].update_date >= recs[2].update_date,
+            "更新日が降順になってない(2)"
+        );
+    }
+
     async fn login_for_test(db: &Database) -> Uuid {
         println!("テスト用ユーザー及びセッションの生成");
         let name = "test";
@@ -713,8 +898,8 @@ mod test {
             title: "一件目(work有り)".to_string(),
             work: Some("働いてます。".to_string()),
             update_date: None,
-            start_date: Some(Local::now().date_naive()),
-            end_date: Some(Local::now().date_naive() + Days::new(3)),
+            start_date: Some(Local::now().date_naive() - Days::new(4)),
+            end_date: Some(Local::now().date_naive() + Days::new(2)),
             done: false,
         };
         db.add_todo_item(&item).await.unwrap();
@@ -725,8 +910,8 @@ mod test {
             title: "二件目(work無し)".to_string(),
             work: None,
             update_date: None,
-            start_date: Some(Local::now().date_naive()),
-            end_date: Some(Local::now().date_naive() + Days::new(3)),
+            start_date: Some(Local::now().date_naive() - Days::new(5)),
+            end_date: Some(Local::now().date_naive() + Days::new(1)),
             done: false,
         };
         db.add_todo_item(&item).await.unwrap();

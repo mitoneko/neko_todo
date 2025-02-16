@@ -6,6 +6,7 @@ mod setup;
 mod todo;
 
 use app_status::AppStatus;
+use config::ItemSortOrder;
 use database::ItemTodo;
 use log::{debug, error, info};
 use serde::Deserialize;
@@ -42,6 +43,8 @@ pub fn run() {
             update_done,
             edit_todo,
             set_is_incomplete,
+            set_item_sort_order,
+            get_item_sort_order,
         ])
         .build(tauri::generate_context!())
         .expect("error thile build tauri application");
@@ -62,14 +65,17 @@ async fn get_todo_list(app_status: State<'_, AppStatus>) -> Result<Vec<ItemTodo>
         None => return Err("NotLogin".to_string()),
     };
 
-    let is_incomplete = {
+    let is_incomplete;
+    let sort_order;
+    {
         let conf = app_status.config().lock().unwrap();
-        conf.get_is_incomplete()
-    };
+        is_incomplete = conf.get_is_incomplete();
+        sort_order = conf.get_item_sort_order();
+    }
 
     app_status
         .todo()
-        .get_todo_list(sess, is_incomplete)
+        .get_todo_list(sess, is_incomplete, sort_order)
         .await
         .map_err(Into::into)
 }
@@ -190,6 +196,32 @@ async fn is_valid_session(app_status: State<'_, AppStatus>) -> Result<bool, Stri
         Err(ref e) => info!("セション確認エラー({})", e),
     }
     sess
+}
+
+/// 現在のアイテムリストのソート方法を返す
+#[command]
+fn get_item_sort_order(app_status: State<'_, AppStatus>) -> String {
+    app_status
+        .config()
+        .lock()
+        .unwrap()
+        .get_item_sort_order()
+        .to_string()
+}
+
+/// アイテムリストのソート方法を設定する
+#[command]
+fn set_item_sort_order(app_status: State<'_, AppStatus>, sort_order: String) -> Result<(), String> {
+    let sort_order = sort_order
+        .parse::<ItemSortOrder>()
+        .map_err(|e| e.to_string())?;
+    app_status
+        .config()
+        .lock()
+        .unwrap()
+        .set_item_sort_order(sort_order);
+    info!("ソートオーダー更新 => {}", sort_order.to_string());
+    Ok(())
 }
 
 /// 現在、有効なセッションを返す。
