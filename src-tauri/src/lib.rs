@@ -6,7 +6,7 @@ mod setup;
 mod todo;
 
 use app_status::AppStatus;
-use config::{ItemSortOrder, ItemSortOrderParseError};
+use config::ItemSortOrder;
 use database::ItemTodo;
 use log::{debug, error, info};
 use serde::Deserialize;
@@ -212,14 +212,15 @@ fn get_item_sort_order(app_status: State<'_, AppStatus>) -> String {
 /// アイテムリストのソート方法を設定する
 #[command]
 fn set_item_sort_order(app_status: State<'_, AppStatus>, sort_order: String) -> Result<(), String> {
-    let sort_order: ItemSortOrder = sort_order
-        .parse()
-        .map_err(|e: ItemSortOrderParseError| e.to_string())?;
+    let sort_order = sort_order
+        .parse::<ItemSortOrder>()
+        .map_err(|e| e.to_string())?;
     app_status
         .config()
         .lock()
         .unwrap()
         .set_item_sort_order(sort_order);
+    info!("ソートオーダー更新 => {}", sort_order.to_string());
     Ok(())
 }
 
