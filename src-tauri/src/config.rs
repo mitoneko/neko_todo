@@ -14,6 +14,7 @@ const DB_USER: &str = "NEKO_DB_DB_USER";
 const DB_PASS: &str = "NEKO_DB_DB_PASS";
 const SESSION: &str = "NEKO_DB_SESSION_ID";
 
+/// アプリケーション全体の状態設定
 #[derive(Debug)]
 pub struct NekoTodoConfig {
     db_host: String,
@@ -22,6 +23,7 @@ pub struct NekoTodoConfig {
     session_id: Option<Uuid>,
     dirty: bool,
     is_incomplete: bool,
+    item_sort_order: ItemSortOrder,
 }
 
 impl NekoTodoConfig {
@@ -39,6 +41,7 @@ impl NekoTodoConfig {
             session_id,
             dirty: false,
             is_incomplete: true,
+            item_sort_order: ItemSortOrder::EndAsc,
         })
     }
 
@@ -60,6 +63,10 @@ impl NekoTodoConfig {
 
     pub fn get_is_incomplete(&self) -> bool {
         self.is_incomplete
+    }
+
+    pub fn get_item_sort_order(&self) -> ItemSortOrder {
+        self.item_sort_order
     }
 
     pub fn set_db_host(&mut self, val: &str) {
@@ -84,6 +91,10 @@ impl NekoTodoConfig {
 
     pub fn set_is_incomplete(&mut self, is_incomplete: bool) {
         self.is_incomplete = is_incomplete;
+    }
+
+    pub fn set_item_sort_order(&mut self, item_sort_order: ItemSortOrder) {
+        self.item_sort_order = item_sort_order;
     }
 
     pub fn save(&mut self) -> Result<()> {
@@ -138,6 +149,52 @@ impl Drop for NekoTodoConfig {
             self.save().unwrap();
         }
     }
+}
+
+/// アイテムリストのソート順位を表す。
+#[derive(Debug, Clone, Copy)]
+pub enum ItemSortOrder {
+    StartAsc,
+    StartDesc,
+    EndAsc,
+    EndDesc,
+    UpdateAsc,
+    UpdateDesc,
+}
+
+impl std::fmt::Display for ItemSortOrder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::StartAsc => write!(f, "StartAsc"),
+            Self::StartDesc => write!(f, "StartDesc"),
+            Self::EndAsc => write!(f, "EndAsc"),
+            Self::EndDesc => write!(f, "EndDesc"),
+            Self::UpdateAsc => write!(f, "UpdateAsc"),
+            Self::UpdateDesc => write!(f, "UpdateDesc"),
+        }
+    }
+}
+
+impl std::str::FromStr for ItemSortOrder {
+    type Err = ItemSortOrderParseError;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "StartAsc" => Ok(Self::StartAsc),
+            "StartDesc" => Ok(Self::StartDesc),
+            "EndAsc" => Ok(Self::EndAsc),
+            "EndDesc" => Ok(Self::EndDesc),
+            "UpdateAsc" => Ok(Self::UpdateAsc),
+            "UpdateDesc" => Ok(Self::UpdateDesc),
+            _ => Err(ItemSortOrderParseError::InvalidArgument),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ItemSortOrderParseError {
+    #[error("Invalid Argument")]
+    InvalidArgument,
 }
 
 #[cfg(test)]
