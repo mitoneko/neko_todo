@@ -43,6 +43,7 @@ pub fn run() {
             update_done,
             edit_todo,
             set_is_incomplete,
+            get_is_incomplete,
             set_item_sort_order,
             get_item_sort_order,
         ])
@@ -154,6 +155,13 @@ async fn edit_todo(
 fn set_is_incomplete(app_status: State<'_, AppStatus>, is_incomplete: bool) {
     let mut conf = app_status.config().lock().unwrap();
     conf.set_is_incomplete(is_incomplete);
+    info!("未完了のみ表示モードを{}にセット", is_incomplete);
+}
+
+/// 完了済みのみ表示モードの現在の値を取得する。
+#[tauri::command]
+fn get_is_incomplete(app_status: State<'_, AppStatus>) -> bool {
+    app_status.config().lock().unwrap().get_is_incomplete()
 }
 
 /// ユーザー登録

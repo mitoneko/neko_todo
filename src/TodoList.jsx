@@ -2,7 +2,7 @@ import { useQuery, } from "@tanstack/react-query";
 import { Container, Grid, GridItem, } from "@yamada-ui/react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
-import TodoItem from "./todoitem";
+import TodoItem from "./TodoItem.jsx";
 import TodoItemToolbar from "./TodoListToolbar.jsx";
 
 const get_todo_list = async () => invoke('get_todo_list') ;
