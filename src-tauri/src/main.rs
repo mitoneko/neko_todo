@@ -21,6 +21,12 @@ use setup::setup;
 use tauri::Manager;
 
 fn main() {
+    setup_log();
+    run()
+}
+
+/// ロギング機構のセットアップ
+fn setup_log() {
     let mut log_file: std::path::PathBuf = ProjectDirs::from("jp", "laki", "nekotodo")
         .unwrap()
         .config_dir()
@@ -41,18 +47,17 @@ fn main() {
                 message
             ))
         })
-        //.level(log::LevelFilter::Info)
-        .level(log::LevelFilter::Debug)
+        .level(log::LevelFilter::Info)
+        //.level(log::LevelFilter::Debug)
         .chain(std::io::stderr())
         .chain(fern::log_file(log_file).unwrap())
         .apply()
         .unwrap();
-
-    run()
 }
 
+/// アプリケーション本体部分
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
+fn run() {
     let app_status = match setup() {
         Ok(s) => s,
         Err(e) => {
