@@ -266,8 +266,10 @@ mod tests {
 
     /// テスト環境のため、環境変数をすべて消去する。
     fn delete_env_val() {
-        std::env::remove_var(DB_HOST);
-        std::env::remove_var(DB_USER);
-        std::env::remove_var(DB_USER);
+        unsafe {
+            std::env::remove_var(DB_HOST);
+            std::env::remove_var(DB_USER);
+            std::env::remove_var(DB_USER);
+        }
     }
 }
