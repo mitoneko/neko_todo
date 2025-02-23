@@ -16,17 +16,20 @@
 \subsection{メインモジュール　main.rs}
 \inputminted[linenos, breaklines]{rust}{src-rs/main.rs}
 \clearpage
-
-\subsection{ライブラリメインモジュール lib.rs}
-\inputminted[linenos, breaklines]{rust}{src-rs/lib.rs}
-\clearpage
-
 \subsection{アプリケーションステータス app\_status.rs}
 \inputminted[linenos, breaklines]{rust}{src-rs/app_status.rs}
 \clearpage
 
 \subsection{コンフィグ設定処理 config.rs}
 \inputminted[linenos, breaklines]{rust}{src-rs/config.rs}
+\clearpage
+
+\subsubsection{NekoTodoConfig実装　impl\_neko\_todo\_config.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/config/impl_neko_todo_config.rs}
+\clearpage
+
+\subsubsection{configモジュールテスト test.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/config/test.rs}
 \clearpage
 
 \subsection{アプリケーション設定情報の処理 setup.rs}
@@ -37,8 +40,72 @@
 \inputminted[linenos, breaklines]{rust}{src-rs/todo.rs}
 \clearpage
 
-\subsection{データベースアクセス database.rs}
+\subsubsection{新規作成 new.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/todo/new.rs}
+\clearpage
+
+\subsubsection{todoデータの取得　get\_todo.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/todo/get_todo.rs}
+\clearpage
+
+\subsubsection{todoデータの編集 edit\_todo.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/todo/edit_todo.rs}
+\clearpage
+
+\subsubsection{ユーザーデータの管理 user.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/todo/user.rs}
+\clearpage
+
+\subsubsection{アプリケーション状態の管理 app\_state.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/todo/app_state.rs}
+\clearpage
+
+\subsubsection{Todoモジュールのテスト test.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/todo/test.rs}
+\clearpage
+
+\subsection{データベースアクセスモジュール database.rs}
 \inputminted[linenos, breaklines]{rust}{src-rs/database.rs}
+\clearpage
+
+\subsubsection{新規作成 new.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/database/new.rs}
+\clearpage
+
+\subsubsection{セッション管理 session.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/database/session.rs}
+\clearpage
+
+\subsubsection{todoアイテム管理 todo.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/database/todo.rs}
+\clearpage
+
+\subsubsection{ユーザーデータ管理 user.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/database/user.rs}
+\clearpage
+
+\subsubsection{データベースモジュールテスト test.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/database/test.rs}
+\clearpage
+
+\subsection{commandモジュール tauri::command関数群 command.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/command.rs}
+\clearpage
+
+\subsubsection {todoリストの表示・編集　todo.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/command/todo.rs}
+\clearpage
+
+\subsubsection {ユーザー操作関係 user.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/command/user.rs}
+\clearpage
+
+\subsubsection {セッション操作関連 session.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/command/session.rs}
+\clearpage
+
+\subsubsection {アプリケーションの状態操作　app\_state.rs}
+\inputminted[linenos, breaklines]{rust}{src-rs/command/app_state.rs}
 \clearpage
 
 \section {フロントエンド　React関係}
@@ -78,8 +145,8 @@
 \inputminted[linenos, breaklines]{jsx}{src-react/TodoList.jsx}
 \clearpage
 
-\subsection {todoアイテム表示 todoitem.jsx}
-\inputminted[linenos, breaklines]{jsx}{src-react/todoitem.jsx}
+\subsection {todoアイテム表示 TodoItem.jsx}
+\inputminted[linenos, breaklines]{jsx}{src-react/TodoItem.jsx}
 \clearpage
 
 \subsection {todoリスト画面　ツールバー TodoListToolbar.jsx} 
