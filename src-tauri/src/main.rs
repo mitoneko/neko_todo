@@ -83,6 +83,12 @@ fn run() {
             set_item_sort_order,
             get_item_sort_order,
         ])
+        .setup(|app| {
+            let win = app.get_webview_window("main").unwrap();
+            win.set_position(tauri::PhysicalPosition::new(200, 100))
+                .unwrap();
+            Ok(())
+        })
         .build(tauri::generate_context!())
         .expect("error thile build tauri application");
     app.run(|app, event| {
