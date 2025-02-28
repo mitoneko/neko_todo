@@ -11,6 +11,10 @@ const DB_HOST: &str = "NEKO_DB_DB_HOST";
 const DB_USER: &str = "NEKO_DB_DB_USER";
 const DB_PASS: &str = "NEKO_DB_DB_PASS";
 const SESSION: &str = "NEKO_DB_SESSION_ID";
+const WIN_POS_X: &str = "NEKO_DB_INIT_WINDOW_POS_X";
+const WIN_POS_Y: &str = "NEKO_DB_INIT_WINDOW_POS_Y";
+const WIN_SIZE_W: &str = "NEKO_DB_INIT_WINDOW_SIZE_W";
+const WIN_SIZE_H: &str = "NEKO_DB_INIT_WINDOW_SIZE_H";
 
 /// アプリケーション全体の状態設定
 #[derive(Debug)]
@@ -22,6 +26,8 @@ pub struct NekoTodoConfig {
     dirty: bool,
     is_incomplete: bool,
     item_sort_order: ItemSortOrder,
+    window_pos: Option<tauri::PhysicalPosition<i32>>,
+    window_size: Option<tauri::PhysicalSize<i32>>,
 }
 
 /// アイテムリストのソート順位を表す。
