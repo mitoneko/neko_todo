@@ -22,7 +22,72 @@ use tauri::Manager;
 
 fn main() {
     setup_log();
-    run()
+    let app_status = build_app_status();
+    run(app_status)
+}
+
+/// アプリケーション本体部分
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+fn run(app_status: AppStatus) {
+    let app = tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .manage(app_status)
+        .invoke_handler(tauri::generate_handler![
+            get_todo_list,
+            get_todo_with_id,
+            regist_user,
+            login,
+            is_valid_session,
+            add_todo,
+            update_done,
+            edit_todo,
+            set_is_incomplete,
+            get_is_incomplete,
+            set_item_sort_order,
+            get_item_sort_order,
+        ])
+        .setup(|app| {
+            // windowサイズ・位置の初期値を設定
+            let win = app.get_webview_window("main").unwrap();
+            win.set_position(tauri::PhysicalPosition::new(200, 100))
+                .unwrap();
+            // windowsサイズ・位置の変更時、保存
+            let h_app = app.handle().clone();
+            win.on_window_event(move |event| {
+                let state = h_app.state::<AppStatus>();
+                match event {
+                    tauri::WindowEvent::Resized(size) => {
+                        state.config().lock().unwrap().set_win_size(*size);
+                    }
+                    tauri::WindowEvent::Moved(pos) => {
+                        state.config().lock().unwrap().set_win_pos(*pos);
+                    }
+                    _ => {}
+                }
+            });
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("error thile build tauri application");
+
+    app.run(|app, event| {
+        let state = app.state::<AppStatus>();
+        if let tauri::RunEvent::Exit = event {
+            info!("終了処理開始");
+            state.config().lock().unwrap().save().unwrap();
+        }
+    });
+}
+
+/// アプリケーションステータスの設定
+fn build_app_status() -> AppStatus {
+    match setup() {
+        Ok(s) => s,
+        Err(e) => {
+            error!("{}", e);
+            std::process::exit(1)
+        }
+    }
 }
 
 /// ロギング機構のセットアップ
@@ -53,49 +118,4 @@ fn setup_log() {
         .chain(fern::log_file(log_file).unwrap())
         .apply()
         .unwrap();
-}
-
-/// アプリケーション本体部分
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-fn run() {
-    let app_status = match setup() {
-        Ok(s) => s,
-        Err(e) => {
-            error!("{}", e);
-            std::process::exit(1)
-        }
-    };
-
-    let app = tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
-        .manage(app_status)
-        .invoke_handler(tauri::generate_handler![
-            get_todo_list,
-            get_todo_with_id,
-            regist_user,
-            login,
-            is_valid_session,
-            add_todo,
-            update_done,
-            edit_todo,
-            set_is_incomplete,
-            get_is_incomplete,
-            set_item_sort_order,
-            get_item_sort_order,
-        ])
-        .setup(|app| {
-            let win = app.get_webview_window("main").unwrap();
-            win.set_position(tauri::PhysicalPosition::new(200, 100))
-                .unwrap();
-            Ok(())
-        })
-        .build(tauri::generate_context!())
-        .expect("error thile build tauri application");
-    app.run(|app, event| {
-        if let tauri::RunEvent::Exit = event {
-            info!("終了処理開始");
-            let state = app.state::<AppStatus>();
-            state.config().lock().unwrap().save().unwrap();
-        }
-    });
 }
