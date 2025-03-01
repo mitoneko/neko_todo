@@ -47,11 +47,20 @@ fn run(app_status: AppStatus) {
             get_item_sort_order,
         ])
         .setup(|app| {
-            // windowサイズ・位置の初期値を設定
             let win = app.get_webview_window("main").unwrap();
-            win.set_position(tauri::PhysicalPosition::new(200, 100))
-                .unwrap();
-            // windowsサイズ・位置の変更時、保存
+
+            // windowサイズ・位置の初期値を設定
+            let (win_pos, win_size) = {
+                let app_state = app.state::<AppStatus>();
+                let conf = app_state.config().lock().unwrap();
+                (conf.get_win_pos(), conf.get_win_size())
+            };
+            if let (Some(win_pos), Some(win_size)) = (win_pos, win_size) {
+                win.set_position(win_pos).unwrap();
+                win.set_size(win_size).unwrap();
+            }
+
+            // windowsサイズ・位置の変更時、保存用ハンドラの登録
             let h_app = app.handle().clone();
             win.on_window_event(move |event| {
                 let state = h_app.state::<AppStatus>();
@@ -62,7 +71,7 @@ fn run(app_status: AppStatus) {
                     tauri::WindowEvent::Moved(pos) => {
                         state.config().lock().unwrap().set_win_pos(*pos);
                     }
-                    _ => {}
+                    _ => { /* 何もしない */ }
                 }
             });
             Ok(())

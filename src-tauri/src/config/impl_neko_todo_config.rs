@@ -31,19 +31,19 @@ impl NekoTodoConfig {
     }
 
     fn win_pos_from_env() -> Option<tauri::PhysicalPosition<i32>> {
-        let Ok(x_env) = std::env::var(WIN_POS_X) else {
-            return None;
-        };
-        let Ok(y_env) = std::env::var(WIN_POS_Y) else {
-            return None;
-        };
-        let Ok(x) = x_env.parse::<i32>() else {
-            return None;
-        };
-        let Ok(y) = y_env.parse::<i32>() else {
-            return None;
-        };
-        Some(tauri::PhysicalPosition::new(x, y))
+        let x_env = std::env::var(WIN_POS_X);
+        let y_env = std::env::var(WIN_POS_Y);
+        if let (Ok(x_env), Ok(y_env)) = (x_env, y_env) {
+            let x = x_env.parse::<i32>();
+            let y = y_env.parse::<i32>();
+            if let (Ok(x), Ok(y)) = (x, y) {
+                Some(tauri::PhysicalPosition::new(x, y))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     fn win_size_from_env() -> Option<tauri::PhysicalSize<u32>> {
