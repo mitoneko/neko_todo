@@ -27,7 +27,7 @@ pub struct NekoTodoConfig {
     is_incomplete: bool,
     item_sort_order: ItemSortOrder,
     window_pos: Option<tauri::PhysicalPosition<i32>>,
-    window_size: Option<tauri::PhysicalSize<i32>>,
+    window_size: Option<tauri::PhysicalSize<u32>>,
 }
 
 /// アイテムリストのソート順位を表す。

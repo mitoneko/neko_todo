@@ -46,17 +46,17 @@ impl NekoTodoConfig {
         Some(tauri::PhysicalPosition::new(x, y))
     }
 
-    fn win_size_from_env() -> Option<tauri::PhysicalSize<i32>> {
+    fn win_size_from_env() -> Option<tauri::PhysicalSize<u32>> {
         let Ok(w_env) = std::env::var(WIN_SIZE_W) else {
             return None;
         };
         let Ok(h_env) = std::env::var(WIN_SIZE_H) else {
             return None;
         };
-        let Ok(w) = w_env.parse::<i32>() else {
+        let Ok(w) = w_env.parse::<u32>() else {
             return None;
         };
-        let Ok(h) = h_env.parse::<i32>() else {
+        let Ok(h) = h_env.parse::<u32>() else {
             return None;
         };
         Some(tauri::PhysicalSize::new(w, h))
@@ -90,7 +90,7 @@ impl NekoTodoConfig {
         self.window_pos
     }
 
-    pub fn get_win_size(&self) -> Option<tauri::PhysicalSize<i32>> {
+    pub fn get_win_size(&self) -> Option<tauri::PhysicalSize<u32>> {
         self.window_size
     }
 
@@ -126,7 +126,7 @@ impl NekoTodoConfig {
         self.window_pos = Some(pos);
     }
 
-    pub fn set_win_size(&mut self, size: tauri::PhysicalSize<i32>) {
+    pub fn set_win_size(&mut self, size: tauri::PhysicalSize<u32>) {
         self.window_size = Some(size);
     }
 
