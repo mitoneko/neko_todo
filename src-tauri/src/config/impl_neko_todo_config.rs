@@ -25,7 +25,41 @@ impl NekoTodoConfig {
             dirty: false,
             is_incomplete: true,
             item_sort_order: ItemSortOrder::EndAsc,
+            window_pos: Self::win_pos_from_env(),
+            window_size: Self::win_size_from_env(),
         })
+    }
+
+    fn win_pos_from_env() -> Option<tauri::PhysicalPosition<i32>> {
+        let x_env = std::env::var(WIN_POS_X);
+        let y_env = std::env::var(WIN_POS_Y);
+        if let (Ok(x_env), Ok(y_env)) = (x_env, y_env) {
+            let x = x_env.parse::<i32>();
+            let y = y_env.parse::<i32>();
+            if let (Ok(x), Ok(y)) = (x, y) {
+                Some(tauri::PhysicalPosition::new(x, y))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    fn win_size_from_env() -> Option<tauri::PhysicalSize<u32>> {
+        let Ok(w_env) = std::env::var(WIN_SIZE_W) else {
+            return None;
+        };
+        let Ok(h_env) = std::env::var(WIN_SIZE_H) else {
+            return None;
+        };
+        let Ok(w) = w_env.parse::<u32>() else {
+            return None;
+        };
+        let Ok(h) = h_env.parse::<u32>() else {
+            return None;
+        };
+        Some(tauri::PhysicalSize::new(w, h))
     }
 
     pub fn get_db_host(&self) -> &str {
@@ -50,6 +84,14 @@ impl NekoTodoConfig {
 
     pub fn get_item_sort_order(&self) -> ItemSortOrder {
         self.item_sort_order
+    }
+
+    pub fn get_win_pos(&self) -> Option<tauri::PhysicalPosition<i32>> {
+        self.window_pos
+    }
+
+    pub fn get_win_size(&self) -> Option<tauri::PhysicalSize<u32>> {
+        self.window_size
     }
 
     pub fn set_db_host(&mut self, val: &str) {
@@ -80,6 +122,14 @@ impl NekoTodoConfig {
         self.item_sort_order = item_sort_order;
     }
 
+    pub fn set_win_pos(&mut self, pos: tauri::PhysicalPosition<i32>) {
+        self.window_pos = Some(pos);
+    }
+
+    pub fn set_win_size(&mut self, size: tauri::PhysicalSize<u32>) {
+        self.window_size = Some(size);
+    }
+
     pub fn save(&mut self) -> Result<()> {
         if !self.dirty {
             return Ok(());
@@ -93,6 +143,15 @@ impl NekoTodoConfig {
         if let Some(s) = self.session_id {
             writeln!(buffer, "{}={}", SESSION, s)?;
         }
+        if let Some(pos) = self.get_win_pos() {
+            writeln!(buffer, "{}={}", WIN_POS_X, pos.x)?;
+            writeln!(buffer, "{}={}", WIN_POS_Y, pos.y)?;
+        }
+        if let Some(size) = self.get_win_size() {
+            writeln!(buffer, "{}={}", WIN_SIZE_W, size.width)?;
+            writeln!(buffer, "{}={}", WIN_SIZE_H, size.height)?;
+        }
+
         self.dirty = false;
         Ok(())
     }
