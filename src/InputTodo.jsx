@@ -1,5 +1,5 @@
 import { FormProvider, useForm, useFormContext } from "react-hook-form";
-import { Button, FormControl, HStack, Input, Text, Textarea, VStack } from "@yamada-ui/react";
+import { Button, Container, FormControl, HStack, Input, Text, Textarea, VStack } from "@yamada-ui/react";
 import {useEffect, useState} from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
@@ -28,29 +28,45 @@ export function InputTodo({send_data, init_val}) {
 
     return (
         <>
-            <FormProvider {...form}>
-                <VStack as="form" onSubmit={handleSubmit((data)=>mutate(data))}>
-                    <FormControl
-                        invalid={!!errors.title}
-                        label="タイトル"
-                        errorMessage={errors?.title?.message}
-                    >
-                        <Input placeholder="やること" 
-                            {...register("title", {required:"入力は必須です。"})}/> 
-                    </FormControl>
-                    <FormControl label="詳細">
-                        <Textarea {...register("work")} />
-                    </FormControl>
-                    <InputDate name="start" label="開始"/>
-                    <InputDate name="end" label="終了"/>
-                    <HStack>
-                        <Button type="submit" w="30%" ml="auto" mr="5%">送信</Button>
-                        <Button w="30%" onClick={onCancelClick} mr="auto">キャンセル</Button>
-                    </HStack>
-                    <Text> {isPending ? "送信中です。" : null} </Text>
-                    <Text> {errorMessage} </Text>
-                </VStack>
-            </FormProvider>
+            <Container>
+                <FormProvider {...form}>
+                    <VStack as="form" onSubmit={handleSubmit((data)=>mutate(data))}>
+                        <FormControl
+                            invalid={!!errors.title}
+                            label="タイトル"
+                            errorMessage={errors?.title?.message}
+                        >
+                            <Input placeholder="やること" 
+                                {...register("title", {required:"入力は必須です。"})}/> 
+                        </FormControl>
+                        <FormControl label="詳細">
+                            <Textarea {...register("work")} />
+                        </FormControl>
+                        <InputDate name="start" label="開始"/>
+                        <InputDate name="end" label="終了"/>
+                        <HStack>
+                            <Button 
+                                type="submit" 
+                                w="30%" 
+                                ml="auto" 
+                                mr="5%"
+                                loading={isPending}
+                                loadingTect="送信中"
+                            >
+                                送信
+                            </Button>
+                            <Button w="30%" 
+                                mr="auto"
+                                disabled={isPending}
+                                onClick={onCancelClick}
+                            >
+                                キャンセル
+                            </Button>
+                        </HStack>
+                        <Text> {errorMessage} </Text>
+                    </VStack>
+                </FormProvider>
+            </Container>
         </>
     );
 }
